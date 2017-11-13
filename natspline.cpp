@@ -5,6 +5,13 @@
 #include<vector>
 #include<array>
 
+
+struct root{
+	double x;
+	double y;
+	int index;
+};
+
 using namespace std;
 
 double findtmsPeak(double baseline, double X[], double Y[], int numpoints);
@@ -79,8 +86,6 @@ int main(int argc, char* argv[]){
 	ofile.close();
 
 	// *********************** APPLY FILTERS STEP **************************************
-
-	cout << "filter type: " << filterType << endl;
 
 	switch(filterType){
 
@@ -199,7 +204,6 @@ int main(int argc, char* argv[]){
 						       }
 						       y = 0;
 					       }
-						cout << "filterpass= " << z << endl;
 				       }
 			       }
 			       else{
@@ -271,86 +275,73 @@ int main(int argc, char* argv[]){
 	vector<double> interpX;
 	vector<double> interpY;
 
-	vector<double> roots;
-	vector<int> rootIndex;
+	vector<root> rootEndpts;
 
 	ofile.open("testSpline");
 
 	// Interpolate on the Natural Cubic Spline
 	double k;
-	double prev = Y[0];
-	double curr;
-	double val;
 	for(i = 0; i < numpoints; i++){
-
 		// Interpolate given value increase OR Decrease
 		if( X[i+1] < X[i]){
 			for(k = X[i]; k > X[i+1]; k = k - 0.001){
 				interpX.push_back(k);
-				val = eqn(k, X[i], a[i], b[i], c[i], d[i]);
-				interpY.push_back(val);
+				interpY.push_back( eqn(k, X[i], a[i], b[i], c[i], d[i]) );
 			}
 		}
 		else{
 			for(k = X[i]; k < X[i+1]; k = k + 0.001){
 				interpX.push_back(k);
-				val = eqn(k, X[i], a[i], b[i], c[i], d[i]);
-				interpY.push_back(val);
+				interpY.push_back( eqn(k, X[i], a[i], b[i], c[i], d[i]) );
 			}
 		}
-
-		curr = val;
-
-		// Root Finding
-		if ( ((prev > baseline) && (curr < baseline) ) ||
-				((prev < baseline) && (curr > baseline) )) {
-
-			cout << "prev= " << prev << " curr= " << curr << endl;
-			roots.push_back(prev);
-			roots.push_back(curr);
-			rootIndex.push_back(i);
-		}
-		prev = curr;
 	}
 
-	// ***************************** ROOT FINDING STEP ******************************************
+	// Find the Root Endpoints
+	for(int i = 0; i < interpY.size(); i++){
 
-	//TODO:Root Finding at Baseline using Steffenson
-	// Need to hold the indexes of the roots after finding the roots based on the
-	// endpoints (one above baseline and one below baseline)	 
-	// INPUT: initial approximation (p0), tolerance, maximum iterations of N0
+		if( (interpY[i] > baseline && interpY[i+1] < baseline) ||
+			(interpY[i] < baseline && interpY[i+1] > baseline)){
+			root prev = {interpX[i], interpY[i], i};
+			root curr = {interpX[i+1], interpY[i+1], i+1};
+			rootEndpts.push_back(prev);
+			rootEndpts.push_back(curr);
+		}
+	}
 
-	// For each equation given each coefficient of a, b, c, d, 
-	// calculate the root(s) of the equation
-
-
-	// GIVEN: roots vector (double) with prev, curr, prev, curr, ...
-	// and rootIndex (int)
-	double rootVals[rootIndex.size()] = {};
+	// Print root endpoints
+	for(int i = 0; i < rootEndpts.size(); i+=2){
+		cout << "prev= " << rootEndpts[i].x << " curr= " << rootEndpts[i+1].x << endl;
+	}
 
 	i = 0;
-	int j = 0;
 	int numroots = 0;
-	cout << "rootIndex.size()= " << rootIndex.size() << endl;
-	while ( (i < roots.size()) && (j < rootIndex.size()) ){
+	vector<root> roots;
 
-		int rootI = rootIndex[j];		
+	while ( i < rootEndpts.size() ){
 
-		double endpta = roots[i];
-		double endptb = roots[i+1];
+		int INDEXA = rootEndpts[i].index;		
+		double endpta = rootEndpts[i].x;
+		double endptb = rootEndpts[i+1].x;
 
 		int biIndex = 1;
-		double fa = eqn( endpta, X[rootI], a[rootI], b[rootI], c[rootI], d[rootI]);
-
+		double fa = rootEndpts[i].y;
+		double p;
 		while( biIndex <= 1000){
 
+			if( endpta > endptb ){
+				p = endpta - fabs(endptb - endpta)/2.0;
+			}
+			else{
+				p = endpta + fabs(endptb - endpta)/2.0;
+			}
+			double fp = eqn(p, interpX[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
 
-			double p = endpta + (endptb - endpta)/2;
-			double fp = eqn(p, X[rootI], a[rootI], b[rootI], c[rootI], d[rootI]);
-
-			if( (fp == baseline) || ( (endptb - endpta)/2 < tolerance) ){
-				cout << "root= " << X[rootI] << endl;
-				rootVals[i] = X[rootI];
+			if( (fp == baseline) || ( fabs(endptb - endpta)/2 < tolerance) ){
+				root r;
+				r.x = p;
+				cout << "root= " << p << endl;
+				roots.push_back(r);
 				numroots++;
 				break;
 			}
@@ -364,88 +355,218 @@ int main(int argc, char* argv[]){
 			}
 		}
 
-		i++;
-		j++;
+		i+=2;
+		
 	}
+	cout << endl;
 
 	//TODO: 4 Integration Techniques
 
 	// Find Root Peaks
 
-/*
-	double rootpeaks[numroots/2] = {};
-	double peak;
+	/*
+	   double rootpeaks[numroots/2] = {};
+	   double peak;
 
-	for(int i = 0; i < numroots; i++){
-		int prevRoot = rootIndex[i];
-		int currRoot = rootIndex[i+1];
-		peak = interpY[prevRoot];
+	   for(int i = 0; i < numroots; i++){
+	   int prevRoot = rootIndex[i];
+	   int currRoot = rootIndex[i+1];
+	   peak = interpY[prevRoot];
 
-		if( prevRoot > currRoot ){
-			int index = currRoot;
-			while ( index < prevRoot ){
-				if( (interpY[index] > peak) && (interpX[index] < interpX[prevRoot]) && (interpX[index] > interpX[currRoot])){
-					peak = interpY[index];
-				}
-				index++;
-			}
-		}
-		else{
-			int index = prevRoot;
-			while (index < currRoot){
-				if( (interpY[index] > peak) && (interpX[index] > interpX[prevRoot]) && (interpX[index] < interpX[currRoot])){
-					peak = interpY[index];
-				}
-				index++;
-			}
-		}
-		rootpeaks[i] = peak;
-	}
-	
-	for(int i = 0; i < numroots/2; i++){
-		cout << "peak= " << rootpeaks[i] << endl;
-	}
-*/
+	   if( prevRoot > currRoot ){
+	   int index = currRoot;
+	   while ( index < prevRoot ){
+	   if( (interpY[index] > peak) && (interpX[index] < interpX[prevRoot]) && (interpX[index] > interpX[currRoot])){
+	   peak = interpY[index];
+	   }
+	   index++;
+	   }
+	   }
+	   else{
+	   int index = prevRoot;
+	   while (index < currRoot){
+	   if( (interpY[index] > peak) && (interpX[index] > interpX[prevRoot]) && (interpX[index] < interpX[currRoot])){
+	   peak = interpY[index];
+	   }
+	   index++;
+	   }
+	   }
+	   rootpeaks[i] = peak;
+	   }
 
-	// Composite Simpson OR Trapezoidal
+	   for(int i = 0; i < numroots/2; i++){
+	   cout << "peak= " << rootpeaks[i] << endl;
+	   }
+	   */
+
+	// Array X -- Initial X values with TMS Subtracted
+	// Array rootVals --
+	// Array rootIndex --
+	// Array interpX --
+
+
+	// XXX:Composite Simpson OR Trapezoidal
 	double x, xi;
 	i = 0;
 	while( i+1 < numroots){
 
-		double endpointA = rootVals[i];
-		double endpointB = rootVals[i+1];
+		double endpointA = roots[i].x;
+		double endpointB = roots[i+1].x;
+		int INDEXA = roots[i].index;
+		int INDEXB = roots[i+1].index;
 
-		double h = (endpointB - endpointA)/50;
-		double xi0 = eqn( a[rootIndex[i]], b[rootIndex[i]], c[rootIndex[i]], d[rootIndex[i]], endpointA, interpX[rootIndex[i]]) +
-				eqn( a[rootIndex[i]], b[rootIndex[i]], c[rootIndex[i]], d[rootIndex[i]], endpointB, interpX[rootIndex[i+1]]);
+		double h = fabs(endpointB - endpointA)/50;
+		double xi0 = eqn(endpointA, X[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]) +
+			eqn( endpointB, X[INDEXB], a[INDEXB], b[INDEXB], c[INDEXB], d[INDEXB]);
 		double xi1 = 0.0;
 		double xi2 = 0.0;
-		cout << "h= " << h << " xi0= " << xi0 << endl;
 
 		for(int j = 1; j < 50; j++){
 
 			x = endpointA + j*h;
 			if( j%2 == 0){
-				xi2 = xi2 + eqn( a[rootIndex[i]], b[rootIndex[i]], c[rootIndex[i]], d[rootIndex[i]], x, interpX[rootIndex[i]]);
+				xi2 = xi2 + eqn( x, X[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
 			}
 			else{
-				xi1 = xi1 + eqn( a[rootIndex[i]], b[rootIndex[i]], c[rootIndex[i]], d[rootIndex[i]], x, interpX[rootIndex[i]]);
+				xi1 = xi1 + eqn( x, X[INDEXA],  a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
 			}
 		}
 		i = i + 2;
 		xi = h * (xi0 + (2*xi2) + (4*xi1))/3.0;
 		cout << "area= " << xi << endl;
 	}
+	cout << "end compsimp" << endl; 
+	cout << endl;
 
-	//TODO: Romberg
-	
-	
+	//XXX: Romberg
+
+	i = 0;
+	while( i+1 < numroots){	
+
+		double A = roots[i].x;
+		double B = roots[i+1].x;
+		int INDEXA = roots[i].index;
+		int INDEXB = roots[i+1].index;
+
+		int n = 50;
+
+		double sum, part;
+		int m, tmp;
+
+		double R[2][n];
+		double h = fabs(B - A);
+
+		R[0][0] = (h / 2.0) * (eqn(A, X[INDEXA],  a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]) +
+				eqn( B, X[INDEXB], a[INDEXB], b[INDEXB], c[INDEXB], d[INDEXB]));
+
+		for(int j = 2; j <= n; j++){
+			sum = 0.0;
+			m = exp((i-2) * log(2.0)) + 0.5;
+			for(double k = 1; k <= m; k++){
+				part = A + (h * (k - 0.5));
+				sum += eqn( part, X[INDEXA],  a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
+			}
+			R[1][0] = 0.5 * ( R[0][0] + (h * sum) );
+
+			for( int l = 2; l <= i; l++){
+				tmp = exp(2 * (j-1) * log(2.0)) + 0.5;
+				R[1][j-1] = R[1][j-2] + (R[1][j-2] - R[0][j-2]) / ( tmp - 1.0);
+			}
+			h = h/2.0;
+			for(int m = 1; m <= i; m++){
+
+				R[0][j-1] = R[1][j-1];
+			}
+		}
+		cout << "area= " << R[1][n-1] << endl;
+		i+=2;
+	}
+	cout << "end romberg" << endl;
+	cout << endl;
 
 	//TODO: Gaussian Quadrature
 
+	// Step 1: Weights and Root
+	
+	// Step 2: Integrate
 
-	//TODO: Adaptive Quadrature
 
+	// XXX: Adaptive Quadrature
+
+	int n = 50;
+	double TOL[n], A[n], H[n], FA[n], FC[n], FB[n], S[n], V[7];
+	int L[n];
+	double AA, BB, EPS, APP, FD, FE, S1, S2;
+	int I, LEV, INDEXA, INDEXB;
+	int count = 0;
+
+	EPS = tolerance;
+
+	while( count+1 < numroots){
+		AA = roots[count].x;
+		BB = roots[count+1].x;
+		INDEXA = roots[count].index;
+		INDEXB = roots[count+1].index;	
+
+		APP = 0.0;
+		I = 1;
+		TOL[I] = 10.0 * EPS;
+		A[I] = AA;
+		H[I] = 0.5 * (BB - AA);
+		FA[I] = eqn(AA, X[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
+		FA[I] = eqn((AA + H[I]), X[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
+		FB[I] = eqn(BB, X[INDEXB], a[INDEXB], b[INDEXB], c[INDEXB], d[INDEXB]);
+		S[I] = H[I] * (FA[I] + 4.0 * FC[I] + FB[I]) / 3.0;
+		L[I] = 1;
+
+		while ( I > 0){
+
+			FD = eqn( (A[I] + 0.5 + H[I]), X[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
+			FE = eqn( (A[I] + 1.5 + H[I]), X[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
+			S1 = H[I] * (FA[I] + 4.0 * FD + FC[I]) / 6.0;
+			S2 = H[I] * (FC[I] + 4.0 * FE + FB[I]) / 6.0;
+
+			V[0] = A[I];
+			V[1] = FA[I];
+			V[2] = FC[I];
+			V[3] = FB[I];
+			V[4] = H[I];
+			V[5] = TOL[I];
+			V[6] = S[I];
+			LEV = L[I];
+			I--;
+
+			if( S1 + S2 - V[6] < V[5]){
+				APP += S1 + S2;
+			}
+			else{
+				I++;
+				A[I] = V[0] + V[4];
+				FA[I] = V[2];
+				FC[I] = FE;
+				FB[I] = V[3];
+				H[I] = 0.5 * V[4];
+				TOL[I] = 0.5 * V[5];
+				S[I] = S2;
+				L[I] = LEV + 1;
+
+				I++;
+				A[I] = V[0];
+				FA[I] = V[1];
+				FC[I] = FD;
+				FB[I] = V[2];
+				H[I] = H[I-1];
+
+				S[I] = S1;
+				L[I] = L[I-1];
+			}
+		}
+		cout << "area= " << APP << endl;
+		count+= 2;
+	}
+	cout << "end adaptive" << endl;
+	cout << endl;
+	
 
 	//TODO: Compare the Areas as a Ratio of Hydrogen Atoms
 
@@ -453,7 +574,6 @@ int main(int argc, char* argv[]){
 	//TODO: Output the Results
 	return 0;
 }
-
 double eqn(double x, double xi, double a, double b, double c, double d){
 
 	return( a + b * (x - xi) + c * (x - xi) * (x - xi)  +  d * (x - xi) * (x - xi) * (x - xi) );
