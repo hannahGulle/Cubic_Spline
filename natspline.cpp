@@ -148,62 +148,58 @@ int main(int argc, char* argv[]){
 			       // Overlay a Savitzky-Golay Filter on the 2D Vector
 			       if( (filterSize == 5) || (filterSize == 11) || (filterSize == 17)){
 
-					       int m = filterSize/2;
-					       int j;
+				       int m = filterSize/2;
+				       int j;
+				       double norm;
+				       double sg[filterSize] = {};
 
-						double sg[filterSize] = {};
+				       if( filterSize == 5){  
+					       double tmp[filterSize] = {-3.0,12.0,17.0,12.0,-3.0};
+					       for(int i = 0; i < filterSize; i++){
+						       sg[i] = tmp[i];
+					       }
+					       norm = 35;
+				       }
+				       if( filterSize == 7){  
+					       double tmp[filterSize] = {-2.0,3.0,6.0,7.0,6.0,3.0,-2.0};
 
-						if( filterSize == 5){  
-							double tmp[filterSize] = {-3.0,12.0,17.0,12.0,-3.0};
-							for(int i = 0; i < filterSize; i++){
-								sg[i] = tmp[i];
-							}
-						}
-						if( filterSize == 7){  
-							double tmp[filterSize] = {-2.0,3.0,6.0,7.0,6.0,3.0,-2.0};
-					
-							for(int i = 0; i < filterSize; i++){
-								sg[i] = tmp[i];
-							}
-						}
-						if( filterSize == 11){  
-							double tmp[filterSize] = {-36.0,9.0,44.0,69.0,84.0,89.0,84.0,69.0,44.0,9.0,-36.0};
-					
-							for(int i = 0; i < filterSize; i++){
-								sg[i] = tmp[i];
-							}
-						}
+					       for(int i = 0; i < filterSize; i++){
+						       sg[i] = tmp[i];
+					       }
+					       norm = 21;
+				       }
+				       if( filterSize == 11){  
+					       double tmp[filterSize] = {-36.0,9.0,44.0,69.0,84.0,89.0,84.0,69.0,44.0,9.0,-36.0};
 
-					int isnana = 0;
+					       for(int i = 0; i < filterSize; i++){
+						       sg[i] = tmp[i];
+					       }
+					       norm = 429;
+				       }
+
 				       for(int z = 0; z < filterPass; z++){
 					       for(int j = 0; j < numpoints; j++){
 						       double ci, next, y;
 						       for(int i = 0; i < filterSize; i++){
-							       if( j+m+i > numpoints){
-								       next = Y[j + m+i - numpoints];
+							       if( j+i > numpoints){
+								       next = Y[j + i - numpoints];
 							       }
 							       else{
-								       next = Y[j+m+i];
+								       next = Y[j+i];
 							       }
-								cout << "next= " << next << endl;
 
-								ci = sg[i];
+							       ci = sg[i];
 							       y += (ci * next);
-						       		
-								if( isnan(y) || isnan(ci) || isnan(next)){ isnana++;}
-							}
-							if(j+m > numpoints){
-								Y[j+m - numpoints] = y / filterSize;
-							}
-							else{
-						       		Y[j+m] = y / filterSize;
-							}
-							y = 0;
-						       cout << "sgy= " << Y[j+m] << endl;
-
-						       cout << "filterpass= " << z << endl;
-					      		cout << "isnan= " << isnana << endl;
-						 }
+						       }
+						       if(j+m > numpoints){
+							       Y[j+m - numpoints] = y / norm;
+						       }
+						       else{
+							       Y[j+m] = y / norm;
+						       }
+						       y = 0;
+					       }
+						cout << "filterpass= " << z << endl;
 				       }
 			       }
 			       else{
@@ -225,7 +221,6 @@ int main(int argc, char* argv[]){
 		ofile << X[i] << " " << Y[i] << endl;
 	}
 	ofile.close();
-	cout << "after savitzky" << endl;
 
 
 	// ************************ Fit the Natural Cubic Spline Step **************************
@@ -331,6 +326,7 @@ int main(int argc, char* argv[]){
 
 	// GIVEN: roots vector (double) with prev, curr, prev, curr, ...
 	// and rootIndex (int)
+	double rootVals[rootIndex.size()] = {};
 
 	i = 0;
 	int j = 0;
@@ -354,6 +350,7 @@ int main(int argc, char* argv[]){
 
 			if( (fp == baseline) || ( (endptb - endpta)/2 < tolerance) ){
 				cout << "root= " << X[rootI] << endl;
+				rootVals[i] = X[rootI];
 				numroots++;
 				break;
 			}
@@ -370,15 +367,79 @@ int main(int argc, char* argv[]){
 		i++;
 		j++;
 	}
-	cout << "numroots= " << numroots << endl;
 
 	//TODO: 4 Integration Techniques
 
-	//TODO: Composite Simpson OR Trapezoidal
+	// Find Root Peaks
 
+/*
+	double rootpeaks[numroots/2] = {};
+	double peak;
+
+	for(int i = 0; i < numroots; i++){
+		int prevRoot = rootIndex[i];
+		int currRoot = rootIndex[i+1];
+		peak = interpY[prevRoot];
+
+		if( prevRoot > currRoot ){
+			int index = currRoot;
+			while ( index < prevRoot ){
+				if( (interpY[index] > peak) && (interpX[index] < interpX[prevRoot]) && (interpX[index] > interpX[currRoot])){
+					peak = interpY[index];
+				}
+				index++;
+			}
+		}
+		else{
+			int index = prevRoot;
+			while (index < currRoot){
+				if( (interpY[index] > peak) && (interpX[index] > interpX[prevRoot]) && (interpX[index] < interpX[currRoot])){
+					peak = interpY[index];
+				}
+				index++;
+			}
+		}
+		rootpeaks[i] = peak;
+	}
+	
+	for(int i = 0; i < numroots/2; i++){
+		cout << "peak= " << rootpeaks[i] << endl;
+	}
+*/
+
+	// Composite Simpson OR Trapezoidal
+	double x, xi;
+	i = 0;
+	while( i+1 < numroots){
+
+		double endpointA = rootVals[i];
+		double endpointB = rootVals[i+1];
+
+		double h = (endpointB - endpointA)/50;
+		double xi0 = eqn( a[rootIndex[i]], b[rootIndex[i]], c[rootIndex[i]], d[rootIndex[i]], endpointA, interpX[rootIndex[i]]) +
+				eqn( a[rootIndex[i]], b[rootIndex[i]], c[rootIndex[i]], d[rootIndex[i]], endpointB, interpX[rootIndex[i+1]]);
+		double xi1 = 0.0;
+		double xi2 = 0.0;
+		cout << "h= " << h << " xi0= " << xi0 << endl;
+
+		for(int j = 1; j < 50; j++){
+
+			x = endpointA + j*h;
+			if( j%2 == 0){
+				xi2 = xi2 + eqn( a[rootIndex[i]], b[rootIndex[i]], c[rootIndex[i]], d[rootIndex[i]], x, interpX[rootIndex[i]]);
+			}
+			else{
+				xi1 = xi1 + eqn( a[rootIndex[i]], b[rootIndex[i]], c[rootIndex[i]], d[rootIndex[i]], x, interpX[rootIndex[i]]);
+			}
+		}
+		i = i + 2;
+		xi = h * (xi0 + (2*xi2) + (4*xi1))/3.0;
+		cout << "area= " << xi << endl;
+	}
 
 	//TODO: Romberg
-
+	
+	
 
 	//TODO: Gaussian Quadrature
 
