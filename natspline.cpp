@@ -280,11 +280,6 @@ int main(int argc, char* argv[]){
 		spline[J].d = (spline[J+1].c - spline[J].c) / (3.0 * h[J]);
 	} 
 	// Cubic Spline Made of Coefficients in Arrays a, b, c, d
-	for(int i = 0; i < numpoints; i++){
-		if( fabs( spline[i].a - 143.26) < 0.5){
-			cout << "a= " << spline[i].a << " b= " << spline[i].b << " c= " << spline[i].c << " d= " << spline[i].d << endl;
-		}
-	}
 
 	// ***************************** INTERPOLATION STEP ************************************
 
@@ -310,32 +305,32 @@ int main(int argc, char* argv[]){
 	ofile.close();
 	
 	// Find the Root Endpoints
-	i = 0;
-	while(i+1 < interp.size()){
+	for(int i = 0; i < interp.size()-1; i+=2){
 		if( (interp[i].y > baseline && interp[i+1].y < baseline) ||
-			(interp[i].y < baseline && interp[i+1].y > baseline)){
-		
+		    (interp[i].y < baseline && interp[i+1].y > baseline)){
 			root prev, curr;
+
 			for(int j = 0; j < numpoints-1; j++){			
 
-				if( (interp[i].x > points[j].x) && (interp[i].x < points[j+1].x) ){
+				if( (interp[i].x >= points[j].x) && (interp[i].x < points[j+1].x) ){
 					prev.initi = j;
 					prev.interpi = i;		
+					prev.x = interp[i].x;
 				}
 	
-				if( (interp[i+1].x > points[j].x && interp[i+1].x < points[j+1].x)){
+				if( (interp[i+1].x >= points[j].x && interp[i+1].x < points[j+1].x)){
 					curr.initi = j+1;
 					curr.interpi = i+1;	
+					curr.x = interp[i+1].x;
 				}
 			}
 
-			prev.x = interp[i].x;
-			curr.x = interp[i+1].x;
 			rootEndpts.push_back(prev);
 			rootEndpts.push_back(curr);
+			cout << "prev= " << prev.x << " curr= " << curr.x << endl;
 		}
-		i += 2;
 	}
+	cout << "current problem: one additional endpoint pair on top and bottom range" << endl;
 	cout << "rootendpoints= " << rootEndpts.size() << endl;
 	
 	i = 0;
