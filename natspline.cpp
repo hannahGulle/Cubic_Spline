@@ -3,21 +3,43 @@
 #include<string>
 #include<math.h>
 #include<vector>
-#include<array>
-
+#include<algorithm>
 
 struct root{
 	double x;
+	int interpi;
+	int initi;
+};
+
+struct point{
+	double x;
 	double y;
-	int index;
+};
+
+struct spline{
+	double a;
+	double b;
+	double c;
+	double d;
+	double x;
+};
+
+struct sg{
+	double five[5];
+	double seven[7];
+	double eleven[11];
 };
 
 using namespace std;
 
-double findtmsPeak(double baseline, double X[], double Y[], int numpoints);
-double eqn(double x, double xi, double a, double b, double c, double d);
+bool sortIncrX( point p1, point p2);
+double findtmsPeak(double baseline, point points[], int numpoints);
+double eqn(double x, spline s);
 int main(int argc, char* argv[]){
 
+	// Possible savitzky golay filter sizes
+	sg sgfilters = { {-3.0,12.0,17.0,12.0,-3.0}, {-2.0,3.0,6.0,7.0,6.0,3.0,-2.0}, {-36.0,9.0,44.0,69.0,84.0,89.0,84.0,69.0,44.0,9.0,-36.0} };
+	
 	// Total Number of Points in NMR File
 	int numpoints = 0;
 
@@ -59,29 +81,30 @@ int main(int argc, char* argv[]){
 	}
 
 
-	// 1D Array Containing X Values
-	double X[numpoints];
-	// 1D Array Containing Y Values
-	double Y[numpoints];
+	// 1D Array Containing X and Y Values
+	point points[numpoints];
 
 	infile.close();
 	infile.open(dataFile.c_str());
 
 	for(int i = 0; i < numpoints; i++){
-		double x, y;
-		infile >> x >> y;
-		X[i] = x;
-		Y[i] = y;
+		point p;
+		infile >> p.x >> p.y;
+		points[i] = p;
 	}
 	infile.close();
 
+	sort( points, points + numpoints, sortIncrX );
+
+
+
 	// ********************** TMS STEP ************************************************
 
-	double tms = findtmsPeak(baseline, X, Y, numpoints);
+	double tms = findtmsPeak(baseline, points, numpoints);
 	ofile.open("nattmsdat");
 	for(int i = 0; i < numpoints; i++){
-		X[i] = X[i] - tms;
-		ofile << X[i] << " " << Y[i] << endl;
+		points[i].x = points[i].x - tms;
+		ofile << points[i].x << " " << points[i].y << endl;
 	}
 	ofile.close();
 
@@ -113,10 +136,10 @@ int main(int argc, char* argv[]){
 							       // Treats the vector as a circular structure
 							       // Overflow returns to the beginning of the vector
 							       if(i > numpoints){
-								       sum += Y[i - numpoints];
+								       sum += points[i - numpoints].y;
 							       }
 							       else{
-								       sum += Y[i];
+								       sum += points[i].y;
 							       }
 							       // No underflow occurs because the starting value is 1	
 						       }
@@ -124,10 +147,10 @@ int main(int argc, char* argv[]){
 
 						       // Overflow applies to the top limit of the filter range as well
 						       if(startIndex+1 > numpoints){
-							       Y[startIndex - numpoints] = avg;
+							       points[startIndex - numpoints].y = avg;
 						       }
 						       else{
-							       Y[startIndex+1] = avg;
+							       points[startIndex+1].y = avg;
 						       }
 						       if(startIndex+1 > numpoints){
 							       startIndex = 0;
@@ -154,31 +177,19 @@ int main(int argc, char* argv[]){
 			       if( (filterSize == 5) || (filterSize == 11) || (filterSize == 17)){
 
 				       int m = filterSize/2;
-				       int j;
 				       double norm;
 				       double sg[filterSize] = {};
 
 				       if( filterSize == 5){  
-					       double tmp[filterSize] = {-3.0,12.0,17.0,12.0,-3.0};
-					       for(int i = 0; i < filterSize; i++){
-						       sg[i] = tmp[i];
-					       }
-					       norm = 35;
+				       	      for(int i = 0; i < 5; i++) { sg[i] = sgfilters.five[i]; } 
+					      norm = 35;
 				       }
 				       if( filterSize == 7){  
-					       double tmp[filterSize] = {-2.0,3.0,6.0,7.0,6.0,3.0,-2.0};
-
-					       for(int i = 0; i < filterSize; i++){
-						       sg[i] = tmp[i];
-					       }
+					       for(int i = 0; i < 7; i++) { sg[i] = sgfilters.seven[i]; }
 					       norm = 21;
 				       }
 				       if( filterSize == 11){  
-					       double tmp[filterSize] = {-36.0,9.0,44.0,69.0,84.0,89.0,84.0,69.0,44.0,9.0,-36.0};
-
-					       for(int i = 0; i < filterSize; i++){
-						       sg[i] = tmp[i];
-					       }
+					       for(int i = 0; i < 11; i++) { sg[i] = sgfilters.eleven[i]; }
 					       norm = 429;
 				       }
 
@@ -187,20 +198,20 @@ int main(int argc, char* argv[]){
 						       double ci, next, y;
 						       for(int i = 0; i < filterSize; i++){
 							       if( j+i > numpoints){
-								       next = Y[j + i - numpoints];
+								       next = points[j + i - numpoints].y;
 							       }
 							       else{
-								       next = Y[j+i];
+								       next = points[j+i].y;
 							       }
 
 							       ci = sg[i];
 							       y += (ci * next);
 						       }
 						       if(j+m > numpoints){
-							       Y[j+m - numpoints] = y / norm;
+							       points[j+m - numpoints].y = y / norm;
 						       }
 						       else{
-							       Y[j+m] = y / norm;
+							       points[j+m].y = y / norm;
 						       }
 						       y = 0;
 					       }
@@ -222,7 +233,7 @@ int main(int argc, char* argv[]){
 
 	ofile.open("sgdat");
 	for(int i = 0; i < numpoints; i++){
-		ofile << X[i] << " " << Y[i] << endl;
+		ofile << points[i].x << " " << points[i].y << endl;
 	}
 	ofile.close();
 
@@ -230,21 +241,22 @@ int main(int argc, char* argv[]){
 	// ************************ Fit the Natural Cubic Spline Step **************************
 	int m = numpoints - 1;
 
-	double a[numpoints], b[numpoints], c[numpoints], d[numpoints];
+	spline spline[numpoints];
 	double h[numpoints], alpha[m], l[numpoints], u[numpoints], z[numpoints];
 
 	int i, J;
 	for(i = 0; i < numpoints; i++){
-		a[i] = Y[i];
+		spline[i].a = points[i].y;
+		spline[i].x = points[i].x;
 	}
 
 	for (i = 0; i <= m; i++){
-		h[i] = X[i+1] - X[i];
+		h[i] = (points[i+1].x - points[i].x);
 	}
 
 	alpha[0] = 0.0;
 	for (i = 1; i < m; i++) {
-		alpha[i] = (a[i+1] - a[i]) * 3.0 / h[i] - (a[i] - a[i-1]) * 3.0 / h[i-1];
+		alpha[i] =  (spline[i+1].a - spline[i].a) * 3.0 / h[i] - (spline[i].a - spline[i-1].a) * 3.0 / h[i-1];
 	}
 
 	l[0] = 1.0;
@@ -252,28 +264,31 @@ int main(int argc, char* argv[]){
 	z[0] = 0.0;
 
 	for (i = 1; i <= m; i++) {
-		l[i] = 2.0 * (X[i+1] - X[i-1]) - h[i-1] * u[i-1];
+		l[i] = 2.0 * (points[i+1].x - points[i-1].x) - h[i-1] * u[i-1];
 		u[i] = h[i] / l[i];
 		z[i] = (alpha[i] - h[i-1] * z[i-1]) / l[i];
 	}
 
 	l[numpoints-1] = 1.0;
 	z[numpoints-1] = 0.0;
-	c[numpoints-1] = 0.0;
+	spline[numpoints-1].c = 0.0;
 
 	for (i = 0; i <= m; i++) {
 		J = m - i;
-		c[J] = z[J] - u[J] * c[J+1];
-		b[J] = (a[J+1] - a[J]) / h[J] - h[J] * (c[J+1] + 2.0 * c[J]) / 3.0;
-		d[J] = (c[J+1] - c[J]) / (3.0 * h[J]);
+		spline[J].c = z[J] - u[J] * spline[J+1].c;
+		spline[J].b = (spline[J+1].a - spline[J].a) / h[J] - h[J] * (spline[J+1].c + 2.0 * spline[J].c) / 3.0;
+		spline[J].d = (spline[J+1].c - spline[J].c) / (3.0 * h[J]);
 	} 
 	// Cubic Spline Made of Coefficients in Arrays a, b, c, d
-
+	for(int i = 0; i < numpoints; i++){
+		if( fabs( spline[i].a - 143.26) < 0.5){
+			cout << "a= " << spline[i].a << " b= " << spline[i].b << " c= " << spline[i].c << " d= " << spline[i].d << endl;
+		}
+	}
 
 	// ***************************** INTERPOLATION STEP ************************************
 
-	vector<double> interpX;
-	vector<double> interpY;
+	vector<point> interp;
 
 	vector<root> rootEndpts;
 
@@ -281,313 +296,285 @@ int main(int argc, char* argv[]){
 
 	// Interpolate on the Natural Cubic Spline
 	double k;
-	for(i = 0; i < numpoints; i++){
+	for(i = 0; i < numpoints-1; i++){
 		// Interpolate given value increase OR Decrease
-		if( X[i+1] < X[i]){
-			for(k = X[i]; k > X[i+1]; k = k - 0.001){
-				interpX.push_back(k);
-				interpY.push_back( eqn(k, X[i], a[i], b[i], c[i], d[i]) );
-			}
-		}
-		else{
-			for(k = X[i]; k < X[i+1]; k = k + 0.001){
-				interpX.push_back(k);
-				interpY.push_back( eqn(k, X[i], a[i], b[i], c[i], d[i]) );
-			}
+		for(k = points[i].x; k < points[i+1].x; k = k + 0.001){
+			point p = {k, eqn(k, spline[i])};
+			interp.push_back(p);
 		}
 	}
 
+	for(int i = 0; i < interp.size(); i++){
+		ofile << interp[i].x << " " << interp[i].y << endl;
+	}	
+	ofile.close();
+	
 	// Find the Root Endpoints
-	for(int i = 0; i < interpY.size(); i++){
+	i = 0;
+	while(i+1 < interp.size()){
+		if( (interp[i].y > baseline && interp[i+1].y < baseline) ||
+			(interp[i].y < baseline && interp[i+1].y > baseline)){
+		
+			root prev, curr;
+			for(int j = 0; j < numpoints-1; j++){			
 
-		if( (interpY[i] > baseline && interpY[i+1] < baseline) ||
-			(interpY[i] < baseline && interpY[i+1] > baseline)){
-			root prev = {interpX[i], interpY[i], i};
-			root curr = {interpX[i+1], interpY[i+1], i+1};
+				if( (interp[i].x > points[j].x) && (interp[i].x < points[j+1].x) ){
+					prev.initi = j;
+					prev.interpi = i;		
+				}
+	
+				if( (interp[i+1].x > points[j].x && interp[i+1].x < points[j+1].x)){
+					curr.initi = j+1;
+					curr.interpi = i+1;	
+				}
+			}
+
+			prev.x = interp[i].x;
+			curr.x = interp[i+1].x;
 			rootEndpts.push_back(prev);
 			rootEndpts.push_back(curr);
 		}
+		i += 2;
 	}
-
-	// Print root endpoints
-	for(int i = 0; i < rootEndpts.size(); i+=2){
-		cout << "prev= " << rootEndpts[i].x << " curr= " << rootEndpts[i+1].x << endl;
-	}
-
+	cout << "rootendpoints= " << rootEndpts.size() << endl;
+	
 	i = 0;
 	int numroots = 0;
 	vector<root> roots;
 
 	while ( i < rootEndpts.size() ){
 
-		int INDEXA = rootEndpts[i].index;		
+		int interpi = rootEndpts[i].interpi;
+		int initi = rootEndpts[i].initi;		
 		double endpta = rootEndpts[i].x;
 		double endptb = rootEndpts[i+1].x;
 
-		int biIndex = 1;
-		double fa = rootEndpts[i].y;
-		double p;
-		while( biIndex <= 1000){
+				int biIndex = 1;
+				double fa = interp[rootEndpts[i].interpi].y;
+				double p;
+				while( biIndex <= 1000){
 
-			if( endpta > endptb ){
-				p = endpta - fabs(endptb - endpta)/2.0;
+					p = endpta + (endptb - endpta)/2.0;
+					double fp = eqn(p, spline[initi]);
+
+					if( (fp == baseline) || ( (endptb - endpta)/2 < tolerance) ){
+						root r;
+						r.x = p;
+						r.interpi = interpi;
+						r.initi = initi;
+		//				cout << "root= " << p << " interpi= " << interpi << " initi= " << initi << endl;
+						roots.push_back(r);
+						numroots++;
+						break;
+					}
+					biIndex++;
+
+					if( fa * fp > 0){
+						endpta = p;
+					}
+					else{
+						endptb = p;
+					}
+				}
+
+				i+=2;
+
+			}	
+			cout << "numroots= " << numroots << endl;
+			cout << endl;
+
+			// XXX:Composite Simpson OR Trapezoidal
+			double x, xi;
+			i = 0;
+			while( i+1 < numroots){
+
+				double endpointA = roots[i].x;
+				double endpointB = roots[i+1].x;
+				int INDEXA = roots[i].interpi;
+				int INDEXB = roots[i+1].interpi;
+				int initia = roots[i].initi;
+				int initib = roots[i+1].initi;
+
+				double h = (endpointB - endpointA)/500;
+				double xi0 = eqn(endpointA, spline[initia]) + eqn( endpointB, spline[initib]);
+
+				double xi1 = 0.0;
+				double xi2 = 0.0;
+
+				for(int j = 1; j < 500; j++){
+
+					x = endpointA + j*h;
+					if( j%2 == 0){
+						xi2 = xi2 + eqn( x, spline[initia]);
+					}
+					else{
+						xi1 = xi1 + eqn( x, spline[initia]);
+					}
+				}
+				i = i + 2;
+				xi = h * (xi0 + (2*xi2) + (4*xi1))/3.0;
+				cout << "area= " << xi << endl;
 			}
-			else{
-				p = endpta + fabs(endptb - endpta)/2.0;
+			cout << "end compsimp" << endl; 
+			cout << endl;
+
+			//XXX: Romberg
+			/*
+			   i = 0;
+			   while( i+1 < numroots){	
+
+			   double A = roots[i].x;
+			   double B = roots[i+1].x;
+			   int INDEXA = roots[i].index;
+			   int INDEXB = roots[i+1].index;
+
+			   int n = 50;
+
+			   double sum, part;
+			   int m, tmp;
+
+			   double R[2][n];
+			   double h = fabs(B - A);
+
+			   R[0][0] = (h / 2.0) * (eqn(A, interpX[INDEXA],  a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]) +
+			   eqn( B, interpX[INDEXB], a[INDEXB], b[INDEXB], c[INDEXB], d[INDEXB]));
+
+			   for(int j = 2; j <= n; j++){
+			   sum = 0.0;
+			   m = exp((i-2) * log(2.0)) + 0.5;
+			   for(double k = 1; k <= m; k++){
+			   part = A + (h * (k - 0.5));
+			   sum += eqn( part, interpX[INDEXA],  a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
+			   }
+			   R[1][0] = 0.5 * ( R[0][0] + (h * sum) );
+
+			   for( int l = 2; l <= i; l++){
+			   tmp = exp(2 * (j-1) * log(2.0)) + 0.5;
+			   R[1][j-1] = R[1][j-2] + (R[1][j-2] - R[0][j-2]) / ( tmp - 1.0);
+			   }
+			   h = h/2.0;
+			   for(int m = 1; m <= i; m++){
+
+			   R[0][j-1] = R[1][j-1];
+			   }
+			   }
+			   cout << "area= " << R[1][n-1] << endl;
+			   i+=2;
+			   }
+			   cout << "end romberg" << endl;
+			   cout << endl;
+
+			//TODO: Gaussian Quadrature
+
+			// Step 1: Weights and Root
+
+			// Step 2: Integrate
+
+
+			// XXX: Adaptive Quadrature
+
+			int n = 50;
+			double TOL[n], A[n], H[n], FA[n], FC[n], FB[n], S[n], V[7];
+			int L[n];
+			double AA, BB, EPS, APP, FD, FE, S1, S2;
+			int I, LEV, INDEXA, INDEXB;
+			int count = 0;
+
+			EPS = tolerance;
+
+			while( count+1 < numroots){
+			AA = roots[count].x;
+			BB = roots[count+1].x;
+			INDEXA = roots[count].index;
+			INDEXB = roots[count+1].index;	
+
+			APP = 0.0;
+			I = 1;
+			TOL[I] = 10.0 * EPS;
+			A[I] = AA;
+			H[I] = 0.5 * (BB - AA);
+			FA[I] = eqn(AA, interpX[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
+			FA[I] = eqn((AA + H[I]), interpX[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
+			FB[I] = eqn(BB, interpX[INDEXB], a[INDEXB], b[INDEXB], c[INDEXB], d[INDEXB]);
+			S[I] = H[I] * (FA[I] + 4.0 * FC[I] + FB[I]) / 3.0;
+			L[I] = 1;
+
+			while ( I > 0){
+
+				FD = eqn( (A[I] + 0.5 + H[I]), interpX[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
+				FE = eqn( (A[I] + 1.5 + H[I]), interpX[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
+				S1 = H[I] * (FA[I] + 4.0 * FD + FC[I]) / 6.0;
+				S2 = H[I] * (FC[I] + 4.0 * FE + FB[I]) / 6.0;
+
+				V[0] = A[I];
+				V[1] = FA[I];
+				V[2] = FC[I];
+				V[3] = FB[I];
+				V[4] = H[I];
+				V[5] = TOL[I];
+				V[6] = S[I];
+				LEV = L[I];
+				I--;
+
+				if( S1 + S2 - V[6] < V[5]){
+					APP += S1 + S2;
+				}
+				else{
+					I++;
+					A[I] = V[0] + V[4];
+					FA[I] = V[2];
+					FC[I] = FE;
+					FB[I] = V[3];
+					H[I] = 0.5 * V[4];
+					TOL[I] = 0.5 * V[5];
+					S[I] = S2;
+					L[I] = LEV + 1;
+
+					I++;
+					A[I] = V[0];
+					FA[I] = V[1];
+					FC[I] = FD;
+					FB[I] = V[2];
+					H[I] = H[I-1];
+
+					S[I] = S1;
+					L[I] = L[I-1];
+				}
 			}
-			double fp = eqn(p, interpX[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
-
-			if( (fp == baseline) || ( fabs(endptb - endpta)/2 < tolerance) ){
-				root r;
-				r.x = p;
-				cout << "root= " << p << endl;
-				roots.push_back(r);
-				numroots++;
-				break;
-			}
-			biIndex++;
-
-			if( fa * fp > 0){
-				endpta = p;
-			}
-			else{
-				endptb = p;
-			}
-		}
-
-		i+=2;
-		
-	}
-	cout << endl;
-
-	//TODO: 4 Integration Techniques
-
-	// Find Root Peaks
-
-	/*
-	   double rootpeaks[numroots/2] = {};
-	   double peak;
-
-	   for(int i = 0; i < numroots; i++){
-	   int prevRoot = rootIndex[i];
-	   int currRoot = rootIndex[i+1];
-	   peak = interpY[prevRoot];
-
-	   if( prevRoot > currRoot ){
-	   int index = currRoot;
-	   while ( index < prevRoot ){
-	   if( (interpY[index] > peak) && (interpX[index] < interpX[prevRoot]) && (interpX[index] > interpX[currRoot])){
-	   peak = interpY[index];
-	   }
-	   index++;
-	   }
-	   }
-	   else{
-	   int index = prevRoot;
-	   while (index < currRoot){
-	   if( (interpY[index] > peak) && (interpX[index] > interpX[prevRoot]) && (interpX[index] < interpX[currRoot])){
-	   peak = interpY[index];
-	   }
-	   index++;
-	   }
-	   }
-	   rootpeaks[i] = peak;
-	   }
-
-	   for(int i = 0; i < numroots/2; i++){
-	   cout << "peak= " << rootpeaks[i] << endl;
-	   }
-	   */
-
-	// Array X -- Initial X values with TMS Subtracted
-	// Array rootVals --
-	// Array rootIndex --
-	// Array interpX --
-
-
-	// XXX:Composite Simpson OR Trapezoidal
-	double x, xi;
-	i = 0;
-	while( i+1 < numroots){
-
-		double endpointA = roots[i].x;
-		double endpointB = roots[i+1].x;
-		int INDEXA = roots[i].index;
-		int INDEXB = roots[i+1].index;
-
-		double h = fabs(endpointB - endpointA)/50;
-		double xi0 = eqn(endpointA, X[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]) +
-			eqn( endpointB, X[INDEXB], a[INDEXB], b[INDEXB], c[INDEXB], d[INDEXB]);
-		double xi1 = 0.0;
-		double xi2 = 0.0;
-
-		for(int j = 1; j < 50; j++){
-
-			x = endpointA + j*h;
-			if( j%2 == 0){
-				xi2 = xi2 + eqn( x, X[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
-			}
-			else{
-				xi1 = xi1 + eqn( x, X[INDEXA],  a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
-			}
-		}
-		i = i + 2;
-		xi = h * (xi0 + (2*xi2) + (4*xi1))/3.0;
-		cout << "area= " << xi << endl;
-	}
-	cout << "end compsimp" << endl; 
-	cout << endl;
-
-	//XXX: Romberg
-
-	i = 0;
-	while( i+1 < numroots){	
-
-		double A = roots[i].x;
-		double B = roots[i+1].x;
-		int INDEXA = roots[i].index;
-		int INDEXB = roots[i+1].index;
-
-		int n = 50;
-
-		double sum, part;
-		int m, tmp;
-
-		double R[2][n];
-		double h = fabs(B - A);
-
-		R[0][0] = (h / 2.0) * (eqn(A, X[INDEXA],  a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]) +
-				eqn( B, X[INDEXB], a[INDEXB], b[INDEXB], c[INDEXB], d[INDEXB]));
-
-		for(int j = 2; j <= n; j++){
-			sum = 0.0;
-			m = exp((i-2) * log(2.0)) + 0.5;
-			for(double k = 1; k <= m; k++){
-				part = A + (h * (k - 0.5));
-				sum += eqn( part, X[INDEXA],  a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
-			}
-			R[1][0] = 0.5 * ( R[0][0] + (h * sum) );
-
-			for( int l = 2; l <= i; l++){
-				tmp = exp(2 * (j-1) * log(2.0)) + 0.5;
-				R[1][j-1] = R[1][j-2] + (R[1][j-2] - R[0][j-2]) / ( tmp - 1.0);
-			}
-			h = h/2.0;
-			for(int m = 1; m <= i; m++){
-
-				R[0][j-1] = R[1][j-1];
-			}
-		}
-		cout << "area= " << R[1][n-1] << endl;
-		i+=2;
-	}
-	cout << "end romberg" << endl;
-	cout << endl;
-
-	//TODO: Gaussian Quadrature
-
-	// Step 1: Weights and Root
-	
-	// Step 2: Integrate
-
-
-	// XXX: Adaptive Quadrature
-
-	int n = 50;
-	double TOL[n], A[n], H[n], FA[n], FC[n], FB[n], S[n], V[7];
-	int L[n];
-	double AA, BB, EPS, APP, FD, FE, S1, S2;
-	int I, LEV, INDEXA, INDEXB;
-	int count = 0;
-
-	EPS = tolerance;
-
-	while( count+1 < numroots){
-		AA = roots[count].x;
-		BB = roots[count+1].x;
-		INDEXA = roots[count].index;
-		INDEXB = roots[count+1].index;	
-
-		APP = 0.0;
-		I = 1;
-		TOL[I] = 10.0 * EPS;
-		A[I] = AA;
-		H[I] = 0.5 * (BB - AA);
-		FA[I] = eqn(AA, X[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
-		FA[I] = eqn((AA + H[I]), X[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
-		FB[I] = eqn(BB, X[INDEXB], a[INDEXB], b[INDEXB], c[INDEXB], d[INDEXB]);
-		S[I] = H[I] * (FA[I] + 4.0 * FC[I] + FB[I]) / 3.0;
-		L[I] = 1;
-
-		while ( I > 0){
-
-			FD = eqn( (A[I] + 0.5 + H[I]), X[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
-			FE = eqn( (A[I] + 1.5 + H[I]), X[INDEXA], a[INDEXA], b[INDEXA], c[INDEXA], d[INDEXA]);
-			S1 = H[I] * (FA[I] + 4.0 * FD + FC[I]) / 6.0;
-			S2 = H[I] * (FC[I] + 4.0 * FE + FB[I]) / 6.0;
-
-			V[0] = A[I];
-			V[1] = FA[I];
-			V[2] = FC[I];
-			V[3] = FB[I];
-			V[4] = H[I];
-			V[5] = TOL[I];
-			V[6] = S[I];
-			LEV = L[I];
-			I--;
-
-			if( S1 + S2 - V[6] < V[5]){
-				APP += S1 + S2;
-			}
-			else{
-				I++;
-				A[I] = V[0] + V[4];
-				FA[I] = V[2];
-				FC[I] = FE;
-				FB[I] = V[3];
-				H[I] = 0.5 * V[4];
-				TOL[I] = 0.5 * V[5];
-				S[I] = S2;
-				L[I] = LEV + 1;
-
-				I++;
-				A[I] = V[0];
-				FA[I] = V[1];
-				FC[I] = FD;
-				FB[I] = V[2];
-				H[I] = H[I-1];
-
-				S[I] = S1;
-				L[I] = L[I-1];
-			}
-		}
-		cout << "area= " << APP << endl;
-		count+= 2;
-	}
-	cout << "end adaptive" << endl;
-	cout << endl;
-	
-
-	//TODO: Compare the Areas as a Ratio of Hydrogen Atoms
-
-
-	//TODO: Output the Results
-	return 0;
+			cout << "area= " << APP << endl;
+			count+= 2;
 }
-double eqn(double x, double xi, double a, double b, double c, double d){
+cout << "end adaptive" << endl;
+cout << endl;
 
-	return( a + b * (x - xi) + c * (x - xi) * (x - xi)  +  d * (x - xi) * (x - xi) * (x - xi) );
+
+//TODO: Compare the Areas as a Ratio of Hydrogen Atoms
+
+
+//TODO: Output the Results
+*/
+return 0;
 }
 
-double findtmsPeak(double baseline, double X[], double Y[], int numpoints){
+bool sortIncrX( point p1, point p2){
+
+	return (p1.x < p2.x);
+}
+
+double eqn(double x, spline s){
+
+	return( s.a + s.b * (x - s.x) + s.c * (x - s.x) * (x - s.x)  +  s.d * (x - s.x) * (x - s.x) * (x - s.x) );
+}
+
+double findtmsPeak(double baseline, point points[], int numpoints){
 	int tmsIndex = -1;
 
 	for(int i = 0; i < numpoints; i++){
-		if( (Y[i] > baseline) ){
-			if ( ((tmsIndex != -1) && (X[i] > X[tmsIndex])) || (tmsIndex == -1) ){
+		if( (points[i].y > baseline) ){
+			if ( ((tmsIndex != -1) && (points[i].x > points[tmsIndex].x)) || (tmsIndex == -1) ){
 				tmsIndex = i;
 			}
 		}
 	}	
-	return X[tmsIndex];
+	return points[tmsIndex].x;
 }
