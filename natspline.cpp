@@ -27,7 +27,8 @@ struct sg{
 
 using namespace std;
 
-double romberg( point p1, point p2, spline spline[], int numpoints, double baseline);
+void setVector( vector<double> v, int index, double value);
+double romberg( point p1, point p2, spline spline[], int numpoints, double baseline, double tolerance);
 double adaptive( point p1, point p2, spline spline[], int numpoints, double tolerance, double baseline);
 double compositeSimpson( point p1, point p2, spline spline[], int numpoints, double baseline);
 vector<point> interpolateSpline(point points[], int numpoints, spline spline[], double baseline);
@@ -95,14 +96,14 @@ int main(int argc, char* argv[]){
 
 	sort( points, points + numpoints, sortIncrX );
 
-// ********************** TMS STEP ************************************************
+	// ********************** TMS STEP ************************************************
 
 	double tms = findtmsPeak(baseline, points, numpoints);
 	for(int i = 0; i < numpoints; i++){
 		points[i].x = points[i].x - tms;
 	}
 
-// *********************** APPLY FILTERS STEP **************************************
+	// *********************** APPLY FILTERS STEP **************************************
 
 	switch(filterType){
 
@@ -117,8 +118,8 @@ int main(int argc, char* argv[]){
 			       // Overlay a Boxcar Filter on the 2D Vector
 			       if( (filterSize > 0 ) && (filterSize % 2 != 0) ){
 				       for(int z = 0; z < filterPass; z++){
-					       float sum = 0.0;	// Sum of the current points in the filter
-					       float avg;		// Average of the current points in the filter
+					       double sum = 0.0;	// Sum of the current points in the filter
+					       double avg;		// Average of the current points in the filter
 					       bool done = false;	// Process End boolean
 
 					       int endIndex = filterSize;
@@ -137,7 +138,7 @@ int main(int argc, char* argv[]){
 							       }
 							       // No underflow occurs because the starting value is 1	
 						       }
-						       avg = sum / float(filterSize);
+						       avg = sum / double(filterSize);
 
 						       // Overflow applies to the top limit of the filter range as well
 						       if(startIndex+1 > numpoints){
@@ -225,11 +226,11 @@ int main(int argc, char* argv[]){
 
 	}
 
-// ************************ Fit the Natural Cubic Spline Step **************************
+	// ************************ Fit the Natural Cubic Spline Step **************************
 	int m = numpoints - 1;
 
 	spline spline[numpoints];
-	double h[numpoints], alpha[m], l[numpoints], u[numpoints], z[numpoints];
+	double h[m], alpha[m], l[numpoints], u[numpoints], z[numpoints];
 
 	int i, J;
 	for(i = 0; i < numpoints; i++){
@@ -237,8 +238,8 @@ int main(int argc, char* argv[]){
 		spline[i].x = points[i].x;
 	}
 
-	for (i = 0; i <= m; i++){
-		h[i] = (points[i+1].x - points[i].x);
+	for (i = 1; i <= m; i++){
+		h[i-1] = (points[i].x - points[i-1].x);
 	}
 
 	alpha[0] = 0.0;
@@ -250,18 +251,17 @@ int main(int argc, char* argv[]){
 	u[0] = 0.0;
 	z[0] = 0.0;
 
-	for (i = 1; i <= m; i++) {
+	for (i = 1; i < m; i++) {
 		l[i] = 2.0 * (points[i+1].x - points[i-1].x) - h[i-1] * u[i-1];
 		u[i] = h[i] / l[i];
 		z[i] = (alpha[i] - h[i-1] * z[i-1]) / l[i];
 	}
 
-	l[numpoints-1] = 1.0;
-	z[numpoints-1] = 0.0;
-	spline[numpoints-1].c = 0.0;
+	l[m] = 1.0;
+	u[m] = 0.0;
+	spline[m].c = 0.0;
 
-	for (i = 0; i <= m; i++) {
-		J = m - i;
+	for (J = numpoints - 2; J >= 0; J--) {
 		spline[J].c = z[J] - u[J] * spline[J+1].c;
 		spline[J].b = (spline[J+1].a - spline[J].a) / h[J] - h[J] * (spline[J+1].c + 2.0 * spline[J].c) / 3.0;
 		spline[J].d = (spline[J+1].c - spline[J].c) / (3.0 * h[J]);
@@ -271,27 +271,21 @@ int main(int argc, char* argv[]){
 		cout << "a= " << spline[i].a << " b= " << spline[i].b << " c= " << spline[i].c << " d= " << spline[i].d << endl;
 	}
 
-// ***************************** INTERPOLATION STEP ************************************
-	vector<point> interp;
-	ofile.open("testSpline");
-	// Interpolate on the Natural Cubic Spline
-	interp = interpolateSpline(points, numpoints, spline, baseline);
-	for(int i = 0; i < interp.size(); i++){
-		ofile << interp[i].x << " " << interp[i].y << endl;
-	}	
-	ofile.close();
-
-// ************************** Find the Roots ************************************
+	// ************************** Find the Roots ************************************
 	vector<point> roots;
 	for(int i = 0; i < numpoints-1; i++){
 
 		point root1;
 		root1.x = NAN;
-		if( (points[i].y < baseline && points[i+1].y > baseline) ||
-				(points[i+1].y < baseline && points[i].y > baseline) ){
+		if(points[i].y < baseline && points[i+1].y > baseline){
 			point prev, curr;
 			prev.x = points[i].x; curr.x = points[i+1].x;
-//			prev.y = points[i].y; curr.y = points[i+1].y;	
+			root1.x = findRoot( prev, curr,spline, numpoints, baseline, tolerance);
+		}
+
+		if(points[i+1].y < baseline && points[i].y > baseline){
+			point prev, curr;
+			prev.x = points[i+1].x; curr.x = points[i].x;
 			root1.x = findRoot( prev, curr, spline, numpoints, baseline, tolerance);
 		}
 
@@ -300,7 +294,7 @@ int main(int argc, char* argv[]){
 		}	
 	}
 
-// *************************** INTEGRATE FOR AREA ***************************************
+	// *************************** INTEGRATE FOR AREA ***************************************
 
 	double area;
 	for( int i = 0; i < roots.size(); i+=2){
@@ -313,7 +307,7 @@ int main(int argc, char* argv[]){
 	for( int i = 0; i < roots.size(); i+=2){
 		point p1 = roots[i];
 		point p2 = roots[i+1];
-		area = romberg(p1, p2, spline, numpoints, baseline);
+		area = romberg(p1, p2, spline, numpoints, baseline, tolerance);
 		cout << "romberg area= " << area << endl;
 	} cout << endl;
 
@@ -323,25 +317,21 @@ int main(int argc, char* argv[]){
 		area = adaptive( p1, p2, spline, numpoints, tolerance, baseline);
 		cout << "adaptive area= " << area << endl;
 	} cout << endl;
-
 	return 0;
 }
 
 double adaptive( point p1, point p2, spline spline[], int numpoints, double tolerance, double baseline){
 
-	int n = 50;
-	double TOL[n], A[n], H[n], FA[n], FC[n], FB[n], S[n], V[7];
-	int L[n];
-	double AA, BB, EPS, APP, FD, FE, S1, S2;
-	int I, LEV, INDEXA, INDEXB;
-	int count = 0;
-
-	EPS = tolerance;
+	int N = 500;
+	double TOL[N], A[N], H[N], FA[N], FC[N], FB[N], S[N], V[8];
+	int L[N];
+	double AA, BB, APP, FD, FE, S1, S2;
+	int INDEXA, INDEXB;
 
 	AA = p1.x;
 	BB = p2.x;
 
-	for(int i = 0; i < numpoints; i++){
+	for(int i = 0; i < numpoints-1; i++){
 		if( AA >= spline[i].x && AA < spline[i+1].x){
 			INDEXA = i;
 		}
@@ -350,68 +340,80 @@ double adaptive( point p1, point p2, spline spline[], int numpoints, double tole
 		}
 	}
 
-	APP = 0.0;
-	I = 1;
-	TOL[I] = 10.0 * EPS;
-	A[I] = AA;
-	H[I] = 0.5 * (BB - AA);
-	FA[I] = eqn(AA, spline[INDEXA], baseline);
-	FA[I] = eqn((AA + H[I]), spline[INDEXA], baseline);
-	FB[I] = eqn(BB, spline[INDEXB], baseline);
-	S[I] = H[I] * (FA[I] + 4.0 * FC[I] + FB[I]) / 3.0;
-	L[I] = 1;
+	TOL[0] = 10 * tolerance;
+	A[0] = AA;
+	H[0] = 0.5 * (BB - AA);
+	FA[0] = (eqn(AA, spline[INDEXA], baseline));
+	FC[0] = (eqn((AA + H[0]), spline[INDEXA], baseline));
+	FB[0] = (eqn(BB, spline[INDEXB], baseline));
+	S[0] = (H[0] * (FA[0] + 4.0 * FD + FC[0]) / 3.0);
+	L[0] = 1;
 
-	while ( I > 0){
+	int I = 1;
+	while ( I > 0 && I < N){
 
-		FD = eqn( (A[I] + 0.5 + H[I]), spline[INDEXA], baseline);
-		FE = eqn( (A[I] + 1.5 + H[I]), spline[INDEXA], baseline);
-		S1 = H[I] * (FA[I] + 4.0 * FD + FC[I]) / 6.0;
-		S2 = H[I] * (FC[I] + 4.0 * FE + FB[I]) / 6.0;
+		FD = eqn( (A[I-1] + 0.5 * H[I-1]), spline[INDEXA], baseline);
+		FE = eqn( (A[I-1] + 1.5 * H[I-1]), spline[INDEXA], baseline);
+		S1 = H[I-1] * (FA[I-1] + 4 * FD + FC[I-1]) / 6.0;
+		S2 = H[I-1] * (FC[I-1] + 4 * FE + FB[I-1]) / 6.0;
 
-		V[0] = A[I];
-		V[1] = FA[I];
-		V[2] = FC[I];
-		V[3] = FB[I];
-		V[4] = H[I];
-		V[5] = TOL[I];
-		V[6] = S[I];
-		LEV = L[I];
+		V[0] = A[I-1];
+		V[1] = FA[I-1];
+		V[2] = FC[I-1];
+		V[3] = FB[I-1];
+		V[4] = H[I-1];
+		V[5] = TOL[I-1];
+		V[6] = S[I-1];
+		V[7] = L[I-1];
 		I--;
 
-		if( S1 + S2 - V[6] < V[5]){
+		if( abs(S1 + S2 - V[6]) < V[5]){
 			APP += S1 + S2;
 		}
 		else{
 			I++;
-			A[I] = V[0] + V[4];
-			FA[I] = V[2];
-			FC[I] = FE;
-			FB[I] = V[3];
-			H[I] = 0.5 * V[4];
-			TOL[I] = 0.5 * V[5];
-			S[I] = S2;
-			L[I] = LEV + 1;
+			A[I-1] = V[0] + V[4];
+			FA[I-1] = V[2];
+			FC[I-1] = FE;
+			FB[I-1] = V[3];
+			H[I-1] = 0.5 * V[4];
+			TOL[I-1] = 0.5 * V[5];
+			S[I-1] = S2;
+			L[I-1] = int(V[7] + 1);
+
 			I++;
-			A[I] = V[0];
-			FA[I] = V[1];
-			FC[I] = FD;
-			FB[I] = V[2];
-			H[I] = H[I-1];
-			S[I] = S1;
-			L[I] = L[I-1];
+			A[I-1] = V[0];
+			FA[I-1] = V[1];
+			FC[I-1] = FD;
+			FB[I-1] = V[2];
+			H[I-1] = H[I-2];
+			TOL[I-1] = TOL[I-2];
+			S[I-1] = S1;
+			L[I-1] = L[I-2];
 		}
 	}
 	return APP;
 }
 
-double romberg (point p1, point p2, spline spline[], int numpoints, double baseline){
+void setVector(vector<double> v, int index, double value){
+	cout << "set at index= " << index << endl;
+	if(v.size() >= index){
+		v[index-1] = value;
+	}
+	else{
+		cout << "set vector less than index of size= " << v.size() << endl;
+		v.push_back(value);
+	}
+}
+
+double romberg (point p1, point p2, spline spline[], int numpoints, double baseline, double tolerance){
 
 	double A = p1.x;
 	double B = p2.x;
 	int INDEXA;
 	int INDEXB;
 
-	for(int i = 0; i < numpoints; i++){
+	for(int i = 0; i < numpoints-1; i++){
 		if( A >= spline[i].x && A < spline[i+1].x){
 			INDEXA = i;
 		}
@@ -421,36 +423,38 @@ double romberg (point p1, point p2, spline spline[], int numpoints, double basel
 	}
 
 	double APP = 0.0;
-	int n = 50;
-
-	double sum, part;
-	int m, tmp;
-
-	double R[2][n];
+	vector< double > R1;
+	vector< double > R2;
 	double h = (B - A);
 
-	R[0][0] = (h / 2.0) * (eqn( A, spline[INDEXA], baseline) + eqn( B, spline[INDEXB], baseline));
+	R1.push_back((h / 2.0) * (eqn( A, spline[INDEXA], baseline) + eqn( B, spline[INDEXB], baseline)));
 
-	for(int i = 2; i <= n; i++){
-			sum = 0.0;
-			m = exp((i-2)*log(2.0)) + 0.5;
-			for(double k = 1; k <= m; k++){
-				part = A + (h * (k - 0.5));
-				sum += eqn( part, spline[INDEXA], baseline);
-			}
-			R[1][0] = 0.5 * ( R[0][0] + (h * sum) );
+	int i = 2;
+	while( ((R1[R1.size()-1] - R1[R1.size()-2]) < tolerance) && (i > 2)){
 
-			for( int j = 2; j <= i; j++){
-				tmp = exp(2 * (j-1) * log(2.0)) + 0.5;
-				R[1][j-1] = R[1][j-2] + (R[1][j-2] - R[0][j-2]) / ( tmp - 1.0);
-			}
-			h = h/2.0;
-			for(int m = 1; m <= i; m++){
+		APP = R1[0] / 2;
+		for( int j = 1; j < exp(i-2)+1; j++){
+			APP += h * eqn(A + (j - 0.5)*h, spline[INDEXA], baseline) / 2.0;
+		}
+		if( R2.size() > 0){ R2[0] = APP; }
+		else{ R2.push_back(APP);}
 
-				R[0][m-1] = R[1][m-1];
-			}
+		for( int j = 2; j < i + 1; j++){
+			APP = R2[j - 2] + (R2[j - 2] - R1[j- 2]) / (pow(4, j-1)-1);
+
+			if( R2.size() > j){ R2[j-1] = APP; }
+			else { R2.push_back(APP); }
+		}
+
+		h = h/2.0;
+
+		for(int j = 0; j < i; j++){
+			if( R1.size() > j){ R1[j] = R2[j]; }
+			else{ R1.push_back(R2[j]); }
+		}
+		i++;
 	}
-	return  R[1][n-1];
+	return  R1[R1.size()-1];
 }
 
 double compositeSimpson( point p1, point p2, spline spline[], int numpoints, double baseline){
@@ -470,7 +474,8 @@ double compositeSimpson( point p1, point p2, spline spline[], int numpoints, dou
 	}
 
 
-	double x, xi;
+	double x;
+	double xi = 0.0;
 	double h = (b - a) / 50;
 	double xi0 = eqn(a, spline[ai], baseline) + eqn( b, spline[bi], baseline);
 
@@ -492,7 +497,7 @@ double compositeSimpson( point p1, point p2, spline spline[], int numpoints, dou
 			xi1 = xi1 + eqn( x, spline[ii], baseline);
 		}
 	}
-	xi = h * (xi0 + (2*xi2) + (4*xi1)) / 3.0;
+	xi = h * (xi0 + (2*xi2) + (4*xi1)) / 3;
 	return xi;
 }
 
@@ -519,8 +524,7 @@ double findRoot( point r1, point r2, spline s[], int numpoints, double baseline,
 
 	double a = r1.x;
 	double b = r2.x;
-	double fa;
-	int biIndex = 1;
+	double fa, p, fp;
 
 	for(int i = 0; i < numpoints; i++){
 		if( r1.x >= s[i].x && r1.x < s[i+1].x ){
@@ -528,26 +532,23 @@ double findRoot( point r1, point r2, spline s[], int numpoints, double baseline,
 		}
 	}
 
-	double p, fp;
+	for(int biIndex = 0; biIndex < 10000; biIndex++){
 
-	while( biIndex <= 1000){
+		p = a + (b - a) / 2;
 
-		p = a + (b - a) / 2.0;
-
-		for(int i = 0; i < numpoints; i++){
+		for(int i = 0; i < numpoints-1; i++){
 			if( p >= s[i].x && p < s[i+1].x ){
 				fp = eqn(p, s[i], baseline);
 			}
 		}
 
-		if( (fp == baseline) || ( ((b - a) / 2.0) < tolerance) ){
+		if( (fp == 0) || ( ((b - a) / 2) < tolerance) ){
 			return p;
 		}
 
-		biIndex++;
-
 		if( fa * fp > 0){
 			a = p;
+			fa = fp;
 		}
 		else{
 			b = p;
