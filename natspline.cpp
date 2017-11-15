@@ -72,7 +72,6 @@ int main(int argc, char* argv[]){
 	infile >> outFile;
 	infile.close();
 
-
 	// data.dat Variables
 	string line;
 
@@ -80,7 +79,6 @@ int main(int argc, char* argv[]){
 	while(getline(infile,line)){
 		numpoints++;
 	}
-
 
 	// 1D Array Containing X and Y Values
 	point points[numpoints];
@@ -96,8 +94,6 @@ int main(int argc, char* argv[]){
 	infile.close();
 
 	sort( points, points + numpoints, sortIncrX );
-
-
 
 // ********************** TMS STEP ************************************************
 
@@ -271,6 +267,9 @@ int main(int argc, char* argv[]){
 		spline[J].d = (spline[J+1].c - spline[J].c) / (3.0 * h[J]);
 	} 
 
+	for(int i = 0; i < numpoints; i++){
+		cout << "a= " << spline[i].a << " b= " << spline[i].b << " c= " << spline[i].c << " d= " << spline[i].d << endl;
+	}
 
 // ***************************** INTERPOLATION STEP ************************************
 	vector<point> interp;
@@ -284,15 +283,15 @@ int main(int argc, char* argv[]){
 
 // ************************** Find the Roots ************************************
 	vector<point> roots;
-	for(int i = 0; i < interp.size()-1; i++){
+	for(int i = 0; i < numpoints-1; i++){
 
 		point root1;
 		root1.x = NAN;
-		if( (interp[i].y < baseline && interp[i+1].y > baseline) ||
-				(interp[i+1].y < baseline && interp[i].y > baseline) ){
+		if( (points[i].y < baseline && points[i+1].y > baseline) ||
+				(points[i+1].y < baseline && points[i].y > baseline) ){
 			point prev, curr;
-			prev.x = interp[i].x; curr.x = interp[i+1].x;
-			prev.y = interp[i].y; curr.y = interp[i+1].y;	
+			prev.x = points[i].x; curr.x = points[i+1].x;
+//			prev.y = points[i].y; curr.y = points[i+1].y;	
 			root1.x = findRoot( prev, curr, spline, numpoints, baseline, tolerance);
 		}
 
@@ -422,7 +421,7 @@ double romberg (point p1, point p2, spline spline[], int numpoints, double basel
 	}
 
 	double APP = 0.0;
-	int n = 21;
+	int n = 50;
 
 	double sum, part;
 	int m, tmp;
@@ -433,25 +432,23 @@ double romberg (point p1, point p2, spline spline[], int numpoints, double basel
 	R[0][0] = (h / 2.0) * (eqn( A, spline[INDEXA], baseline) + eqn( B, spline[INDEXB], baseline));
 
 	for(int i = 2; i <= n; i++){
-		for(int j = 2; j <= n; j++){
 			sum = 0.0;
-			m = exp((i-2) * log(2.0)) + 0.5;
+			m = exp((i-2)*log(2.0)) + 0.5;
 			for(double k = 1; k <= m; k++){
 				part = A + (h * (k - 0.5));
 				sum += eqn( part, spline[INDEXA], baseline);
 			}
 			R[1][0] = 0.5 * ( R[0][0] + (h * sum) );
 
-			for( int l = 2; l <= i; l++){
+			for( int j = 2; j <= i; j++){
 				tmp = exp(2 * (j-1) * log(2.0)) + 0.5;
 				R[1][j-1] = R[1][j-2] + (R[1][j-2] - R[0][j-2]) / ( tmp - 1.0);
 			}
 			h = h/2.0;
 			for(int m = 1; m <= i; m++){
 
-				R[0][j-1] = R[1][j-1];
+				R[0][m-1] = R[1][m-1];
 			}
-		}
 	}
 	return  R[1][n-1];
 }
@@ -522,9 +519,15 @@ double findRoot( point r1, point r2, spline s[], int numpoints, double baseline,
 
 	double a = r1.x;
 	double b = r2.x;
-
+	double fa;
 	int biIndex = 1;
-	double fa = r1.y;
+
+	for(int i = 0; i < numpoints; i++){
+		if( r1.x >= s[i].x && r1.x < s[i+1].x ){
+			fa = eqn( a, s[i], baseline);
+		}
+	}
+
 	double p, fp;
 
 	while( biIndex <= 1000){
