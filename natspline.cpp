@@ -1,3 +1,7 @@
+// Hannah Gulle
+// CSC 335 Project 1 -- Cubic Spline
+// Due 11/15/17
+
 #include<iostream>
 #include<fstream>
 #include<string>
@@ -6,11 +10,15 @@
 #include<algorithm>
 #include<cmath>
 
+// Holds the double X and Y values of a point
 struct point{
 	double x;
 	double y;
 };
 
+// Holds the coefficients of a cubic spline 
+// segment (a, b, c, d) and the corresponding
+// double x as the lower range x value
 struct spline{
 	double a;
 	double b;
@@ -19,6 +27,8 @@ struct spline{
 	double x;
 };
 
+// Holds the 3 possible savitzky golay filter
+// size arrays
 struct sg{
 	double five[5];
 	double seven[7];
@@ -27,19 +37,24 @@ struct sg{
 
 using namespace std;
 
-void setVector( vector<double> v, int index, double value);
+// AREA INTEGRATION METHODS
 double romberg( point p1, point p2, spline spline[], int numpoints, double baseline, double tolerance);
 double adaptive( point p1, point p2, spline spline[], int numpoints, double tolerance, double baseline);
 double compositeSimpson( point p1, point p2, spline spline[], int numpoints, double baseline);
+double guassian( point p1, point p2, spline spline[], int numpoints, double tolerance, double baseline);
+
+// CUBIC SPLINE METHODS
 vector<point> interpolateSpline(point points[], int numpoints, spline spline[], double baseline);
+double eqn(double x, spline s, double baseline);
+
+// ROOT FINDING, SORTING, AND TMS PEAK METHODS
 double findRoot( point r1, point r2, spline s[], int numpoints, double baseline, double tolerance);
 bool sortIncrX( point p1, point p2);
 double findtmsPeak(double baseline, point points[], int numpoints);
-double eqn(double x, spline s, double baseline);
 
 int main(int argc, char* argv[]){
 
-	// Possible savitzky golay filter sizes
+	// Possible savitzky golay filter sizes with corresponding weights
 	sg sgfilters = { {-3.0,12.0,17.0,12.0,-3.0}, {-2.0,3.0,6.0,7.0,6.0,3.0,-2.0}, {-36.0,9.0,44.0,69.0,84.0,89.0,84.0,69.0,44.0,9.0,-36.0} };
 
 	// Total Number of Points in NMR File
@@ -73,20 +88,19 @@ int main(int argc, char* argv[]){
 	infile >> outFile;
 	infile.close();
 
-	// data.dat Variables
+	// data file Variables
 	string line;
 
 	infile.open(dataFile.c_str());
 	while(getline(infile,line)){
 		numpoints++;
 	}
-
-	// 1D Array Containing X and Y Values
-	point points[numpoints];
-
 	infile.close();
+	
+	// 1D Array Containing Point Structs Containing X and Y Values
+	// from the data file
+	point points[numpoints];
 	infile.open(dataFile.c_str());
-
 	for(int i = 0; i < numpoints; i++){
 		point p;
 		infile >> p.x >> p.y;
@@ -94,23 +108,24 @@ int main(int argc, char* argv[]){
 	}
 	infile.close();
 
+	// Sorts the points array by increasing X value
 	sort( points, points + numpoints, sortIncrX );
 
 	// ********************** TMS STEP ************************************************
-
+	// Finds the highest Y value above the baseline with the highest x value
+	// then subtracts the tms point x value from all x values.
 	double tms = findtmsPeak(baseline, points, numpoints);
 	for(int i = 0; i < numpoints; i++){
 		points[i].x = points[i].x - tms;
 	}
 
 	// *********************** APPLY FILTERS STEP **************************************
-
+	// Three filters available: None, Boxcar, Savitzky Golay (5, 7, 11)
 	switch(filterType){
-
 		// NO FILTER
 		case 0:{
-			       cout << "Filter: None Specified. No Filter Size Needed" << endl;
-			       break;
+			 cout << "Filter: None Specified. No Filter Size Needed" << endl;
+			 break;
 		       }
 
 		       // BOXCAR FILTER
@@ -143,15 +158,11 @@ int main(int argc, char* argv[]){
 						       // Overflow applies to the top limit of the filter range as well
 						       if(startIndex+1 > numpoints){
 							       points[startIndex - numpoints].y = avg;
-						       }
+						       		startIndex = 0;
+							}
 						       else{
 							       points[startIndex+1].y = avg;
-						       }
-						       if(startIndex+1 > numpoints){
-							       startIndex = 0;
-						       }
-						       else{
-							       startIndex++;
+								startIndex++;
 						       }
 						       endIndex++;
 						       sum = 0.0;	// Sum is restart for each filter pass
@@ -175,6 +186,7 @@ int main(int argc, char* argv[]){
 				       double norm;
 				       double sg[filterSize] = {};
 
+					// Weight Arrays and Normalization Factors for the Corresponding Savitzky Filter Size
 				       if( filterSize == 5){  
 					       for(int i = 0; i < 5; i++) { sg[i] = sgfilters.five[i]; } 
 					       norm = 35;
@@ -188,6 +200,7 @@ int main(int argc, char* argv[]){
 					       norm = 429;
 				       }
 
+					// Run the filter filterPass number of times over the entire array
 				       for(int z = 0; z < filterPass; z++){
 					       for(int j = 0; j < numpoints; j++){
 						       double ci, next, y;
@@ -226,7 +239,10 @@ int main(int argc, char* argv[]){
 
 	}
 
-	// ************************ Fit the Natural Cubic Spline Step **************************
+	// ************************ Fit the Natural Cubic Spline **************************
+	// Coefficients of the Natural Cubic Spline stored in Spline array "Spline" with 
+	// each coefficient a double property of the spline struct
+	
 	int m = numpoints - 1;
 
 	spline spline[numpoints];
@@ -272,31 +288,44 @@ int main(int argc, char* argv[]){
 	}
 
 	// ************************** Find the Roots ************************************
+	// Uses Bisection method on the prev and curr root endpoints to find the exact value
+	// of the root. If no root is found (NAN), no root is added to the roots point vector.
+	
 	vector<point> roots;
 	for(int i = 0; i < numpoints-1; i++){
 
 		point root1;
 		root1.x = NAN;
+		// One point must be above and the other below in either variation
+		// (first below and second above OR first above and second below)
 		if(points[i].y < baseline && points[i+1].y > baseline){
 			point prev, curr;
 			prev.x = points[i].x; curr.x = points[i+1].x;
+			// Using Bisection Method
 			root1.x = findRoot( prev, curr,spline, numpoints, baseline, tolerance);
 		}
 
 		if(points[i+1].y < baseline && points[i].y > baseline){
 			point prev, curr;
 			prev.x = points[i+1].x; curr.x = points[i].x;
+			// Using Bisection Method
 			root1.x = findRoot( prev, curr, spline, numpoints, baseline, tolerance);
 		}
 
+		// Push all real roots
 		if( !isnan(root1.x)){
 			roots.push_back(root1);
 		}	
 	}
 
 	// *************************** INTEGRATE FOR AREA ***************************************
-
+	// Four Integration Types are Offered
+	// Composite Simpson, Romberg, Adaptive Quadrature, Gaussian Quadrature
+	
 	double area;
+	// The roots point vector holds pairs of roots at either side of a peak
+	// Each pair of roots is used to find the area of the peak
+	// Composite Simspon
 	for( int i = 0; i < roots.size(); i+=2){
 		point p1 = roots[i];
 		point p2 = roots[i+1];
@@ -304,6 +333,7 @@ int main(int argc, char* argv[]){
 		cout << "composite area= " << area << endl;
 	} cout << endl;
 
+	// Romberg
 	for( int i = 0; i < roots.size(); i+=2){
 		point p1 = roots[i];
 		point p2 = roots[i+1];
@@ -311,15 +341,57 @@ int main(int argc, char* argv[]){
 		cout << "romberg area= " << area << endl;
 	} cout << endl;
 
+	// Adaptive Quadrature
 	for( int i = 0; i < roots.size(); i+=2){
 		point p1 = roots[i];
 		point p2 = roots[i+1];
 		area = adaptive( p1, p2, spline, numpoints, tolerance, baseline);
 		cout << "adaptive area= " << area << endl;
 	} cout << endl;
+
+	// Guassian Quadrature
+	for( int i = 0; i < roots.size(); i+=2){
+		point p1 = roots[i];
+		point p2 = roots[i+2];
+		area = guassian(p1, p2, spline, numpoints, tolerance, baseline);
+		cout << "guassian area= " << area << endl;
+	} cout << endl;
+
 	return 0;
 }
 
+// Guassian Quadrature Method using Pg. 233 from the texbook
+double guassian( point p1, point p2, spline spline[], int numpoints, double tolerance, double baseline){
+
+	// With 2 points, Gaussian Coefficients are 1.0000
+
+	double a = p1.x;
+	double b = p2.x;
+	double x = (a + b) / 2;
+	double top = ((b - a) * (sqrt(3.0)/3.0) + b + a) / 2.0;
+	double bot = ((b - a) * (-1 * sqrt(3.0)/3.0) + b + a) / 2.0;
+	int INDEX;
+
+	// Retrieves the appropriate spline index based on the 
+	// x value to be calculated within the x value range
+	// of each spline piece
+	for(int i = 0; i < numpoints-1; i++){
+		if( x >= spline[i].x && x < spline[i+1].x){
+			INDEX = i;
+	//		cout << "spline x= " << spline[i].x << " x= " << x << endl;
+		}
+	}
+
+	double t1 = eqn(top, spline[INDEX], baseline) * ((b - a)/2);
+	double t2 = eqn(bot, spline[INDEX], baseline) * ((b - a)/2);
+
+//	cout << "b-a/2 = " << ((b - a)/2) << endl;
+//	cout << "gauss parts: " << t1 << " " << t2 << endl;
+
+	return t1 + t2;
+}
+
+// Adaptive Quadrature Method using Pg. 224 (Algorithm 4.3) from the text book
 double adaptive( point p1, point p2, spline spline[], int numpoints, double tolerance, double baseline){
 
 	int N = 500;
@@ -331,6 +403,9 @@ double adaptive( point p1, point p2, spline spline[], int numpoints, double tole
 	AA = p1.x;
 	BB = p2.x;
 
+	// Retrieves the appropriate spline index based on the 
+	// x value to be calculated within the x value range
+	// of each spline piece
 	for(int i = 0; i < numpoints-1; i++){
 		if( AA >= spline[i].x && AA < spline[i+1].x){
 			INDEXA = i;
@@ -340,7 +415,7 @@ double adaptive( point p1, point p2, spline spline[], int numpoints, double tole
 		}
 	}
 
-	TOL[0] = 10 * tolerance;
+	TOL[0] = tolerance;
 	A[0] = AA;
 	H[0] = 0.5 * (BB - AA);
 	FA[0] = (eqn(AA, spline[INDEXA], baseline));
@@ -372,40 +447,33 @@ double adaptive( point p1, point p2, spline spline[], int numpoints, double tole
 		}
 		else{
 			I++;
-			A[I-1] = V[0] + V[4];
-			FA[I-1] = V[2];
-			FC[I-1] = FE;
-			FB[I-1] = V[3];
-			H[I-1] = 0.5 * V[4];
-			TOL[I-1] = 0.5 * V[5];
-			S[I-1] = S2;
-			L[I-1] = int(V[7] + 1);
+			int z = I - 1;
+			A[z] = V[0] + V[4];
+			FA[z] = V[2];
+			FC[z] = FE;
+			FB[z] = V[3];
+			H[z] = 0.5 * V[4];
+			TOL[z] = 0.5 * V[5];
+			S[z] = S2;
+			L[z] = int(V[7] + 1);
 
 			I++;
-			A[I-1] = V[0];
-			FA[I-1] = V[1];
-			FC[I-1] = FD;
-			FB[I-1] = V[2];
-			H[I-1] = H[I-2];
-			TOL[I-1] = TOL[I-2];
-			S[I-1] = S1;
-			L[I-1] = L[I-2];
+			z = I - 1;
+			int y = I - 2;
+			A[z] = V[0];
+			FA[z] = V[1];
+			FC[z] = FD;
+			FB[z] = V[2];
+			H[z] = H[y];
+			TOL[z] = TOL[y];
+			S[z] = S1;
+			L[z] = L[y];
 		}
 	}
 	return APP;
 }
 
-void setVector(vector<double> v, int index, double value){
-	cout << "set at index= " << index << endl;
-	if(v.size() >= index){
-		v[index-1] = value;
-	}
-	else{
-		cout << "set vector less than index of size= " << v.size() << endl;
-		v.push_back(value);
-	}
-}
-
+// Romberg Integration using the algorithm outlined on Pg. 216 (Algorithm 4.2) in the textbook
 double romberg (point p1, point p2, spline spline[], int numpoints, double baseline, double tolerance){
 
 	double A = p1.x;
@@ -413,6 +481,9 @@ double romberg (point p1, point p2, spline spline[], int numpoints, double basel
 	int INDEXA;
 	int INDEXB;
 
+	// Retrieves the appropriate spline index based on the 
+	// x value to be calculated within the x value range
+	// of each spline piece
 	for(int i = 0; i < numpoints-1; i++){
 		if( A >= spline[i].x && A < spline[i+1].x){
 			INDEXA = i;
@@ -456,7 +527,7 @@ double romberg (point p1, point p2, spline spline[], int numpoints, double basel
 	}
 	return  R1[R1.size()-1];
 }
-
+// Composite Simpson Integration uses the algorithm outlined on Pg. 205 (Algorithm 4.1) in the textbook.
 double compositeSimpson( point p1, point p2, spline spline[], int numpoints, double baseline){
 
 
@@ -464,6 +535,9 @@ double compositeSimpson( point p1, point p2, spline spline[], int numpoints, dou
 	double b = p2.x;
 	int ai, bi, ii;
 
+	// Retrieves the appropriate spline index based on the 
+	// x value to be calculated within the x value range
+	// of each spline piece
 	for(int i = 0; i < numpoints-1; i++){
 		if( a >= spline[i].x && a < spline[i+1].x ){
 			ai = i;
@@ -501,8 +575,10 @@ double compositeSimpson( point p1, point p2, spline spline[], int numpoints, dou
 	return xi;
 }
 
+// Interpolates on the entire cubic spline to produce an interpolated points array necessary for plotting
 vector<point> interpolateSpline ( point points[], int numpoints, spline spline[], double baseline ){
 
+	// Interpolated points array
 	vector<point> interp;
 
 	// Interpolate on the Natural Cubic Spline
@@ -518,7 +594,7 @@ vector<point> interpolateSpline ( point points[], int numpoints, spline spline[]
 }
 
 
-// Uses Bisection Root Finding
+// Uses Bisection Root Finding as outlined on Pg. 49 (Algorithm 2.1) in the textbook.
 // Between root endpoints r1 and r2 with spline equation s
 double findRoot( point r1, point r2, spline s[], int numpoints, double baseline, double tolerance){
 
@@ -526,6 +602,9 @@ double findRoot( point r1, point r2, spline s[], int numpoints, double baseline,
 	double b = r2.x;
 	double fa, p, fp;
 
+	// Retrieves the appropriate spline index based on the 
+	// x value to be calculated within the x value range
+	// of each spline piece
 	for(int i = 0; i < numpoints; i++){
 		if( r1.x >= s[i].x && r1.x < s[i+1].x ){
 			fa = eqn( a, s[i], baseline);
@@ -536,6 +615,9 @@ double findRoot( point r1, point r2, spline s[], int numpoints, double baseline,
 
 		p = a + (b - a) / 2;
 
+		// Retrieves the appropriate spline index based on the 
+		// x value to be calculated within the x value range
+		// of each spline piece
 		for(int i = 0; i < numpoints-1; i++){
 			if( p >= s[i].x && p < s[i+1].x ){
 				fp = eqn(p, s[i], baseline);
@@ -557,16 +639,21 @@ double findRoot( point r1, point r2, spline s[], int numpoints, double baseline,
 	return NAN;
 }
 
+// Defines the sorting process of the points array for increasing 
+// x value.
 bool sortIncrX( point p1, point p2){
 
 	return (p1.x < p2.x);
 }
 
+// Returns the y value of the spline given double x, the corresponding
+// spline segment, and the baseline
 double eqn(double x, spline s, double baseline){
 
 	return ( s.a + s.b * (x - s.x) + s.c * (x - s.x) * (x - s.x)  +  s.d * (x - s.x) * (x - s.x) * (x - s.x) ) - baseline;
 }
 
+// Returns the highest x value whose y is above the baseline
 double findtmsPeak(double baseline, point points[], int numpoints){
 	int tmsIndex = -1;
 
