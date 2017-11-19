@@ -462,7 +462,6 @@ int main(int argc, char* argv[]){
 double findTop( double x1, double x2, spline s[], int numpoints, double baseline){
 
 	int INDEX;
-
 	for(int i = 0; i < numpoints; i++){
 		if( x1 >= s[i].x && x1 < s[i+1].x){
 			INDEX = i;
@@ -482,30 +481,32 @@ double findTop( double x1, double x2, spline s[], int numpoints, double baseline
 double guassian( double a, double b, spline spline[], int numpoints, double baseline){
 
 	// With 2 points, Gaussian Coefficients are 1.0000
-	double x = (b+a)/2;
-	double r[2] = { sqrt(3)/3, -sqrt(3)/3 };
+	double r[2] = { -sqrt(3)/3, sqrt(3)/3 };
 	double w = 9.999999999999996E-001;
-
-/*
+	
 	double sum = 0.0;
-	for( int h = 0; h < 2; h++ ){
-		double tmp = ((b-a)/2) * r[h] + ((b+a)/2);
-		for(int i = 0; i < numpoints; i++ ){
-			if( tmp >= spline[i].x && tmp < spline[+1].x ){	
-				sum += w * eqn( tmp, spline[i], baseline );
-			}
-		}
-	}
-*/
-	double t1, t2;
+	
+	double t1 = ( (b - a) * r[0] + b + a ) / 2;
+	double t2 = ( (b - a) * r[1] + b + a ) / 2;
+	double y = (b-a)/2;
+
+	int one, two;
+
 	for( int i = 0; i < numpoints; i++ ){
-		if( x >= spline[i].x && x < spline[i+1].x ){
-			t1 = eqn( ((b-a)*r[0] + b + a)/2, spline[i], baseline) * (b-a)/2;
-			t2 = eqn( ((b-a)*r[1] + b + a)/2, spline[i], baseline) * (b-a)/2;	
+		if( t1 >= spline[i].x && t1 < spline[i+1].x ){
+			one = i;
 		}
+		if( t2 >= spline[i].x && t2 < spline[i+1].x ){
+			two = i;
+		}
+
 	}
 
-	return t1 + t2;
+	sum = eqn( t1 , spline[one], baseline ) + eqn( t2, spline[two], baseline );
+	sum *= y;	
+	sum *= w;
+
+	return sum;
 }
 
 // Adaptive Quadrature Method using Pg. 224 (Algorithm 4.3) from the text book
