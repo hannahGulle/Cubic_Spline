@@ -393,7 +393,6 @@ int main(int argc, char* argv[]){
 		cout << "adaptive area= " << area << endl;
 	} cout << endl;
 */
-
 	// Guassian Quadrature
 	for( int i = 0; i < roots.size(); i+=2){
 		area = guassian(roots[i], roots[i+1], spline, numpoints, baseline);
@@ -469,7 +468,7 @@ double findTop( double x1, double x2, spline s[], int numpoints, double baseline
 	}
 	double top = eqn(x1, s[INDEX], baseline);
 	double tmp;
-	for(double i = x1; i < x2; i += 0.000001){
+for(double i = x1; i < x2; i += 0.000001){
 		tmp = eqn(i, s[INDEX], baseline);
 		if( tmp > top){
 			top = tmp;
@@ -480,32 +479,34 @@ double findTop( double x1, double x2, spline s[], int numpoints, double baseline
 // Guassian Quadrature Method using Pg. 233 from the texbook
 double guassian( double a, double b, spline spline[], int numpoints, double baseline){
 
-	// With 2 points, Gaussian Coefficients are 1.0000
-	double r[2] = { -sqrt(3)/3, sqrt(3)/3 };
-	double w = 9.999999999999996E-001;
-	
+	double x[8] = {-9.602898564975363E-001,
+			-7.966664774136267E-001,
+			-5.255324099163290E-001,
+			-1.834346424956498E-001,
+			1.834346424956498E-001,
+			5.255324099163290E-001,
+			7.966664774136267E-001,
+			9.602898564975363E-001 };
+	double w[8] = {1.012285362903706E-001,
+			2.223810344533744E-001,
+			3.137066458778874E-001,
+			3.626837833783621E-001,
+			3.626837833783621E-001,
+			3.137066458778874E-001,
+			2.223810344533744E-001,
+			1.012285362903706E-001 };	
+
 	double sum = 0.0;
-	
-	double t1 = ( (b - a) * r[0] + b + a ) / 2;
-	double t2 = ( (b - a) * r[1] + b + a ) / 2;
-	double y = (b-a)/2;
-
-	int one, two;
-
-	for( int i = 0; i < numpoints; i++ ){
-		if( t1 >= spline[i].x && t1 < spline[i+1].x ){
-			one = i;
+	int ind;
+	for( int i = 0; i < 8; i++ ){
+		double tmp = ((b-a) * x[i] + a + b) / 2.0;
+		for( int i = 0; i < numpoints; i++ ){
+			if( tmp >= spline[i].x && tmp < spline[i+1].x ){
+				ind = i;		
+			}
 		}
-		if( t2 >= spline[i].x && t2 < spline[i+1].x ){
-			two = i;
-		}
-
+		sum += w[i] * eqn( tmp, spline[ind], baseline ) * (b-a) / 2.0;
 	}
-
-	sum = eqn( t1 , spline[one], baseline ) + eqn( t2, spline[two], baseline );
-	sum *= y;	
-	sum *= w;
-
 	return sum;
 }
 
