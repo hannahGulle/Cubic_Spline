@@ -318,6 +318,7 @@ int main(int argc, char* argv[]){
 		}	
 	}
 
+
 	// *************************** INTEGRATE FOR AREA ***************************************
 	// Four Integration Types are Offered
 	// Composite Simpson, Romberg, Adaptive Quadrature, Gaussian Quadrature
@@ -352,7 +353,7 @@ int main(int argc, char* argv[]){
 	// Guassian Quadrature
 	for( int i = 0; i < roots.size(); i+=2){
 		point p1 = roots[i];
-		point p2 = roots[i+2];
+		point p2 = roots[i+1];
 		area = guassian(p1, p2, spline, numpoints, tolerance, baseline);
 		cout << "guassian area= " << area << endl;
 	} cout << endl;
