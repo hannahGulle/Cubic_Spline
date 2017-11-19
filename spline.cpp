@@ -56,6 +56,7 @@ double findTop( double x1, double x2, spline s[], int numpoints, double baseline
 
 int main(int argc, char* argv[]){
 
+	// Set precision of all numeric output
 	cout.precision(12);
 
 	// Possible savitzky golay filter sizes with corresponding weights
@@ -256,6 +257,7 @@ int main(int argc, char* argv[]){
 	// ************************ Fit the Natural Cubic Spline **************************
 	// Coefficients of the Natural Cubic Spline stored in Spline array "Spline" with 
 	// each coefficient a double property of the spline struct
+	// Using the algorithm outlined in ALG034.C on page 147 of the textbook.
 
 	int m = numpoints - 1;
 
@@ -264,51 +266,53 @@ int main(int argc, char* argv[]){
 	double a[numpoints], b[numpoints], c[numpoints], d[numpoints];
 
 	int i, J;
+	// STEP ZERO: SET A VALUES TO Y VALUES OF THE INITIAL DATA
 	for(i = 0; i < numpoints; i++){
 		a[i] = points[i].y;
 	}
 
+	// STEP ONE: SET H VALUES
 	for (i = 1; i <= m; i++){
 		h[i-1] = (points[i].x - points[i-1].x);
 	}
 
+	// STEP TWO: SET ALPHA VALUES
 	alpha[0] = 0.0;
 	for (i = 1; i < m; i++) {
 		alpha[i] =  (a[i+1] - a[i]) * 3.0 / h[i] - (a[i] - a[i-1]) * 3.0 / h[i-1];
 	}
 
+	// STEP THREE
 	// L, U, and Z matrices for Tridiagonal Matrix Solving
+	// USES METHOD DESCRIBED IN ALGORITHM 6.7
 	l[0] = 1.0;
 	u[0] = 0.0;
 	z[0] = 0.0;
 
+	// STEP FOUR
 	for (i = 1; i < m; i++) {
 		l[i] = 2.0 * (points[i+1].x - points[i-1].x) - h[i-1] * u[i-1];
 		u[i] = h[i] / l[i];
 		z[i] = (alpha[i] - h[i-1] * z[i-1]) / l[i];
 	}
 
+	// STEP FIVE
 	l[m] = 1.0;
 	u[m] = 0.0;
-	spline[m].c = 0.0;
+	c[m] = 0.0;
 
+	// STEP SIX: SET B, C, D COEFFICIENT VALUES
 	for (J = numpoints - 2; J >= 0; J--) {
 		c[J] = z[J] - u[J] * c[J+1];
 		b[J] = (a[J+1] - a[J]) / h[J] - h[J] * (c[J+1] + 2.0 * c[J]) / 3.0;
 		d[J] = (c[J+1] - c[J]) / (3.0 * h[J]);
 	} 
 
+	// SET COEFFICIENT VALUES IN THE SPLINE ACCORDINGLY
 	for(int i = 0; i < numpoints; i++){
 		spline[i] = {a[i], b[i], c[i], d[i], points[i].x};
 	}
 
-/*	
-	ofile.open("splinePts");
-	vector<point> interp = interpolateSpline(points, numpoints, spline, baseline);
-	for(int i = 0; i < interp.size(); i++){
-		ofile << interp[i].x << " " << interp[i].y << endl;
-	}
-*/
 	// ************************** Find the Roots ************************************
 	// Uses Bisection method on the prev and curr root endpoints to find the exact value
 	// of the root. If no root is found (NAN), no root is added to the roots point vector.
@@ -337,25 +341,44 @@ int main(int argc, char* argv[]){
 	// *************************** INTEGRATE FOR AREA ***************************************
 	// Four Integration Types are Offered
 	// Composite Simpson, Romberg, Adaptive Quadrature, Gaussian Quadrature
-	
+
+	double area[roots.size()/2];	
 	switch(integration){
+		// The roots point vector holds pairs of roots at either side of a peak
+		// Each pair of roots is used to find the area of the peak
 		case 0:{
 			integrationName = "Composite Simpson Integration";
+			// Composite Simspon Integration
+			for( int i = 0; i < roots.size(); i+=2){
+				area[i/2] = compositeSimpson(roots[i], roots[i+1], spline, numpoints, baseline);
+			}
 			break;
 		}
 
 		case 1:{
 			integrationName = "Romberg Integration";
+			// Romberg Integration 
+			for( int i = 0; i < roots.size(); i+=2){
+				area[i/2] = romberg(roots[i], roots[i+1], spline, numpoints, baseline, tolerance);
+			}
 			break;
 		}
 
 		case 2:{
-			integrationName = "Adaptive Quadrature Integration";
+			integrationName = "Adaptive Quadrature Integration";	
+			// Adaptive Quadrature Integration
+			for( int i = 0; i < roots.size(); i+=2){
+				area[i/2] = adaptive( roots[i], roots[i+1], spline, numpoints, tolerance, baseline);
+			}
 			break;
 		}
 
 		case 3:{
-			integrationName = "Gaussian Quadrature Integration";
+			integrationName = "Gaussian Legendre Quadrature Integration";
+			// Guassian Legendre Quadrature Integration
+			for( int i = 0; i < roots.size(); i+=2){
+				area[i/2] = guassian(roots[i], roots[i+1], spline, numpoints, baseline);
+			}
 			break;
 		}
 
@@ -369,47 +392,27 @@ int main(int argc, char* argv[]){
 			break;
 		}
 	}
-	double area;
-	// The roots point vector holds pairs of roots at either side of a peak
-	// Each pair of roots is used to find the area of the peak
-	// Composite Simspon
-	for( int i = 0; i < roots.size(); i+=2){
-		area = compositeSimpson(roots[i], roots[i+1], spline, numpoints, baseline);
-		cout << "composite area= " << area << endl;
-	} cout << endl;
-
-
-/*
-	// Romberg
-	for( int i = 0; i < roots.size(); i+=2){
-		area = romberg(roots[i], roots[i+1], spline, numpoints, baseline, tolerance);
-		cout << "romberg area= " << area << endl;
-	} cout << endl;
-
-
-	// Adaptive Quadrature
-	for( int i = 0; i < roots.size(); i+=2){
-		area = adaptive( roots[i], roots[i+1], spline, numpoints, tolerance, baseline);
-		cout << "adaptive area= " << area << endl;
-	} cout << endl;
-*/
-	// Guassian Quadrature
-	for( int i = 0; i < roots.size(); i+=2){
-		area = guassian(roots[i], roots[i+1], spline, numpoints, baseline);
-		cout << "guassian area= " << area << endl;
-	} cout << endl;
-
-/*
-	
-	double top;
-	for(int i = 0; i < roots.size(); i+=2){
-		point p1 = roots[i];
-		point p2 = roots[i+1];	
-		top = findTop(p1, p2, spline, numpoints, baseline);
-		cout << "top= " << top << endl;
+	double small = area[0];
+	int hydrogens[roots.size()/2];
+	// Find the smallest area
+	for( int i = 0; i < roots.size()/2 ; i++ ){
+		if( area[i] < small ){
+			small = area[i];
+		}
 	}
-*/
+	// Find the integer ratio of the smallest area (hydrogens) to the other areas
+	for( int i = 0; i < roots.size()/2 ; i++ ){
+		hydrogens[i] = int( area[i] / small );
+	}
 
+	// Find the top of each peak
+	double top[roots.size()/2];
+	for( int i = 0; i < roots.size(); i+=2 ){
+		top[i] = findTop( roots[i], roots[i+1], spline, numpoints, baseline);
+		cout << "top= " << top[i] << endl;
+	}
+
+	// End Run Time/ Wall Time Calculation
 	clock_t end = clock();
 
 	// ************************ OUTPUT RESULTS TO ANALYSIS.DAT ************************************
@@ -447,6 +450,10 @@ int main(int argc, char* argv[]){
 	ofile << "Peak\t" << "Begin\t" << "End\t" << "Location\t" << "Top\t" << "Area\t" << "Hydrogens" << endl;
 	ofile << "===================================================================" << endl;
 
+//	for( int i = 0; i < roots.size(); i += 2 ){
+//		cout << (i/2)+1 << "\t" << roots[i] << "\t" << roots[i+1] << "\t" << (roots[i] + roots[i+1])/2.0 << "\t" << top[i] << "\t" << area[i/2] << "\t" << hydrogens[i/2] << endl;
+//	}
+
 	ofile << endl;
 	ofile << endl;
 	
@@ -458,6 +465,7 @@ int main(int argc, char* argv[]){
 	return 0;
 }
 
+// Finds the Peak Y Value between two roots (x values)
 double findTop( double x1, double x2, spline s[], int numpoints, double baseline){
 
 	int INDEX;
@@ -468,7 +476,7 @@ double findTop( double x1, double x2, spline s[], int numpoints, double baseline
 	}
 	double top = eqn(x1, s[INDEX], baseline);
 	double tmp;
-for(double i = x1; i < x2; i += 0.000001){
+	for(double i = x1; i < x2; i += 0.000001){
 		tmp = eqn(i, s[INDEX], baseline);
 		if( tmp > top){
 			top = tmp;
@@ -476,9 +484,11 @@ for(double i = x1; i < x2; i += 0.000001){
 	}
 	return top;
 }
-// Guassian Quadrature Method using Pg. 233 from the texbook
+// Gaussian Legendre Quadrature Method using pound's code from https://github.com/drlbs/quadrature.git
+// converted to c++
 double guassian( double a, double b, spline spline[], int numpoints, double baseline){
 
+	// Root Values Array
 	double x[8] = {-9.602898564975363E-001,
 			-7.966664774136267E-001,
 			-5.255324099163290E-001,
@@ -487,6 +497,7 @@ double guassian( double a, double b, spline spline[], int numpoints, double base
 			5.255324099163290E-001,
 			7.966664774136267E-001,
 			9.602898564975363E-001 };
+	// Weight Values Array
 	double w[8] = {1.012285362903706E-001,
 			2.223810344533744E-001,
 			3.137066458778874E-001,
@@ -495,9 +506,12 @@ double guassian( double a, double b, spline spline[], int numpoints, double base
 			3.137066458778874E-001,
 			2.223810344533744E-001,
 			1.012285362903706E-001 };	
-
+	
+	// Area Sum
 	double sum = 0.0;
+	// Index of gaussian t input in spline function
 	int ind;
+	// Integrate to find the area
 	for( int i = 0; i < 8; i++ ){
 		double tmp = ((b-a) * x[i] + a + b) / 2.0;
 		for( int i = 0; i < numpoints; i++ ){
@@ -507,6 +521,7 @@ double guassian( double a, double b, spline spline[], int numpoints, double base
 		}
 		sum += w[i] * eqn( tmp, spline[ind], baseline ) * (b-a) / 2.0;
 	}
+	// return the area summation
 	return sum;
 }
 
