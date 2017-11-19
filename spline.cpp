@@ -392,6 +392,7 @@ int main(int argc, char* argv[]){
 			break;
 		}
 	}
+
 	double small = area[0];
 	int hydrogens[roots.size()/2];
 	// Find the smallest area
@@ -407,9 +408,9 @@ int main(int argc, char* argv[]){
 
 	// Find the top of each peak
 	double top[roots.size()/2];
+	double mid;
 	for( int i = 0; i < roots.size(); i+=2 ){
-		top[i] = findTop( roots[i], roots[i+1], spline, numpoints, baseline);
-		cout << "top= " << top[i] << endl;
+		top[i/2] = findTop(roots[i], roots[i+1], spline, numpoints, baseline);	
 	}
 
 	// End Run Time/ Wall Time Calculation
@@ -421,6 +422,9 @@ int main(int argc, char* argv[]){
 	// Baseline Adjustment | Tolerance | Filtering Name | Filter Size | Filter Passes
 	
 	ofile.open(outFile);
+	ofile << "\t\t -=> NMR ANALYSIS <=-" << endl;
+	ofile << endl;
+
 	ofile << "Program Options" << endl;
 	ofile << "===============" << endl;
 	ofile << "Baseline Adjustment:\t" << baseline << endl;
@@ -440,7 +444,7 @@ int main(int argc, char* argv[]){
 	// File Name | Plot Shift for Tms
 	ofile << "Plot File Data" << endl;
 	ofile << "==============" << endl;
-	ofile << filename << endl;
+	ofile << "File: " << filename << endl;
 	ofile << "Plot Shifted " << tms << " ppm for TMS calibration" << endl;
 	ofile << endl;
 	ofile << endl;
@@ -450,9 +454,9 @@ int main(int argc, char* argv[]){
 	ofile << "Peak\t" << "Begin\t" << "End\t" << "Location\t" << "Top\t" << "Area\t" << "Hydrogens" << endl;
 	ofile << "===================================================================" << endl;
 
-//	for( int i = 0; i < roots.size(); i += 2 ){
-//		cout << (i/2)+1 << "\t" << roots[i] << "\t" << roots[i+1] << "\t" << (roots[i] + roots[i+1])/2.0 << "\t" << top[i] << "\t" << area[i/2] << "\t" << hydrogens[i/2] << endl;
-//	}
+	for( int i = 0; i < roots.size(); i += 2 ){
+		ofile << (i/2)+1 << "   " << roots[i] << "   " << roots[i+1] << "   " << (roots[i] + roots[i+1])/2.0 << "   " << top[i/2] << "   " << area[i/2] << "   " << hydrogens[i/2] << endl;
+	}
 
 	ofile << endl;
 	ofile << endl;
@@ -468,18 +472,16 @@ int main(int argc, char* argv[]){
 // Finds the Peak Y Value between two roots (x values)
 double findTop( double x1, double x2, spline s[], int numpoints, double baseline){
 
-	int INDEX;
-	for(int i = 0; i < numpoints; i++){
-		if( x1 >= s[i].x && x1 < s[i+1].x){
-			INDEX = i;
-		}
-	}
-	double top = eqn(x1, s[INDEX], baseline);
+	double top = 0.0;
 	double tmp;
 	for(double i = x1; i < x2; i += 0.000001){
-		tmp = eqn(i, s[INDEX], baseline);
-		if( tmp > top){
-			top = tmp;
+		for( int j = 0; j < numpoints; j++ ){
+			if( i >= s[j].x && i < s[j+1].x ){
+				tmp = eqn(i, s[j], baseline);
+				if( tmp > top ){
+					top = tmp;
+				}
+			}
 		}
 	}
 	return top;
