@@ -56,7 +56,7 @@ double findTop( double x1, double x2, spline s[], int numpoints, double baseline
 
 int main(int argc, char* argv[]){
 
-	// Set precision of all numeric output
+	// Set precision of all numeric output to 12 total digits
 	cout.precision(12);
 
 	// Possible savitzky golay filter sizes with corresponding weights
@@ -157,8 +157,8 @@ int main(int argc, char* argv[]){
 					       while(startIndex < numpoints){
 						       for(int i = startIndex; i < endIndex; i++){
 
-							       // Treats the vector as a circular structure
-							       // Overflow returns to the beginning of the vector
+							       // Treats the array as a circular structure
+							       // Overflow returns to the beginning of the array
 							       if(i > numpoints){
 								       sum += points[i - numpoints].y;
 							       }
@@ -249,6 +249,8 @@ int main(int argc, char* argv[]){
 		       }
 
 		default:{
+			cerr << "Invalid Filter Type; Defaulted to None. Choices:" << endl;
+			cerr << "None (0), Boxcar (1), Savitzky-Golay (2)" << endl;
 			break;
 			}
 
@@ -453,7 +455,6 @@ int main(int argc, char* argv[]){
 	// Peak Number | Peak Start X | Peak End X | Peak Manifold X | Peak Top Y | Peak Area | Whole Number Ratio
 	ofile << "Peak\t" << "Begin\t" << "End\t" << "Location\t" << "Top\t" << "Area\t" << "Hydrogens" << endl;
 	ofile << "===================================================================" << endl;
-
 	for( int i = 0; i < roots.size(); i += 2 ){
 		ofile << (i/2)+1 << "   " << roots[i] << "   " << roots[i+1] << "   " << (roots[i] + roots[i+1])/2.0 << "   " << top[i/2] << "   " << area[i/2] << "   " << hydrogens[i/2] << endl;
 	}
@@ -462,7 +463,7 @@ int main(int argc, char* argv[]){
 	ofile << endl;
 	
 	// Analysis Time
-	ofile << "Anaylsis took " << (double)(end - start)/CLOCKS_PER_SEC << " seconds." << endl;	
+	ofile << "Anaylsis took " << (double)(1000 * (end - start)/CLOCKS_PER_SEC) << " milliseconds." << endl;	
 	ofile << "(From TMS Calibration through Integration)" << endl;
 
 	ofile.close();
@@ -656,10 +657,12 @@ double romberg (double A, double B, spline spline[], int numpoints, double basel
 	double APP;
 	vector< double > R1;
 	vector< double > R2;
+	// STEP ONE
 	double h = (B - A);
 
 	R1.push_back((h / 2) * (eqn( A, spline[INDEXA], baseline) + eqn( B, spline[INDEXB], baseline)));
 
+	// STEP TWO
 	int i = 2;
 	bool withinRange = false;
 	while( !withinRange){
@@ -673,9 +676,11 @@ double romberg (double A, double B, spline spline[], int numpoints, double basel
 				}
 			}
 		}
+		// STEP THREE
 		if( R2.size() > 0){ R2[0] = APP; }
 		else{ R2.push_back(APP);}
 
+		// STEP FOUR
 		for( int j = 2; j < i + 1; j++){
 			APP = R2[j - 2] + (R2[j - 2] - R1[j- 2]) / (pow(4, j-1)-1);
 
@@ -683,17 +688,23 @@ double romberg (double A, double B, spline spline[], int numpoints, double basel
 			else { R2.push_back(APP); }
 		}
 
+		// STEP FIVE
 		h = h/2;
 
+		// STEP SIX
 		for(int j = 0; j < i; j++){
 			if( R1.size() > j){ R1[j] = R2[j]; }
 			else{ R1.push_back(R2[j]); }
 		}
+		
+		// IF THE DIFFERENCE BETWEEN THE LAST TWO INDICES OF R1 IS WITHIN TOLERANCE
+		// AND THIS IS NOT THE FIRST LOOP THEN THE AREA HAS BEEN ACHIEVED
 		if( fabs(R1[R1.size() - 1] - R1[R1.size() - 2]) < tolerance && i > 2){
 			withinRange = true;
 		}
 		i++;
 	}
+	// RETURN THE AREA
 	return  R1[R1.size()-1];
 }
 // Composite Simpson Integration uses the algorithm outlined on Pg. 205 (Algorithm 4.1) in the textbook.
@@ -717,20 +728,24 @@ double compositeSimpson( double a, double b, spline spline[], int numpoints, dou
 
 	double x;
 	double xi = 0.0;
+	// STEP ONE
 	double h = (b - a) / 50;
+	// STEP TWO
 	double xi0 = eqn(a, spline[ai], baseline) + eqn( b, spline[bi], baseline);
-
 	double xi1 = 0.0;
 	double xi2 = 0.0;
 
+	// STEP THREE
 	for(int j = 1; j < 50; j++){
 
+		// STEP FOUR
 		x = a + j*h;
 		for(int i = 0; i < numpoints-1; i++){
 			if( x >= spline[i].x && x < spline[i+1].x ){
 				ii = i;
 			}
 		}
+		// STEP FIVE
 		if( j%2 == 0){
 			xi2 = xi2 + eqn( x, spline[ii], baseline);
 		}
@@ -738,6 +753,7 @@ double compositeSimpson( double a, double b, spline spline[], int numpoints, dou
 			xi1 = xi1 + eqn( x, spline[ii], baseline);
 		}
 	}
+	// AREA HAS BEEN ACHIEVED; RETURN IT
 	xi = h * (xi0 + (2*xi2) + (4*xi1)) / 3;
 	return xi;
 }
@@ -780,6 +796,7 @@ double findRoot( point r1, point r2, spline s[], int numpoints, double baseline,
 
 	for(int biIndex = 0; biIndex < 10000; biIndex++){
 
+		// STEP ONE
 		p = a + (b - a) / 2;
 
 		// Retrieves the appropriate spline index based on the 
@@ -790,11 +807,13 @@ double findRoot( point r1, point r2, spline s[], int numpoints, double baseline,
 				fp = eqn(p, s[i], baseline);
 			}
 		}
-
+		// STEP TWO
+		// IF THE MID POINT BETWEEN THE ENDPOINTS IS WITHIN TOLERANCE
+		// OR IF THE ROOT IS AT ZERO, THEN THE ROOT HAS BEEN FOUND
 		if( (fp == 0) || ( ((b - a) / 2) < tolerance) ){
 			return p;
 		}
-
+		// STEP THREE
 		if( fa * fp > 0){
 			a = p;
 			fa = fp;
@@ -803,6 +822,8 @@ double findRoot( point r1, point r2, spline s[], int numpoints, double baseline,
 			b = p;
 		}
 	}
+	// IF NO ROOT IS FOUND FOR ALL ITERATIONS OF THE BISECTION PROCESS,
+	// NAN IS RETURNED.
 	return NAN;
 }
 
