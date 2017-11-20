@@ -4,18 +4,17 @@ Class: CSC 335
 Language: C++
 
 Compile Instructions:
-c++ spline.cpp NMR.in
+c++ spline.cpp
 
 Run Instructions:
-./a.out
+./a.out nmr.in
 
 ALGORITHM:
 1.	Open and Read in NMR.in file
 2.	Open and Read in data file
-3. 	Find TMS peak in vector
-4.	Build a boxcar filter that takes positive odd integer (n) filter points and
-build the array of y data points
-5.	Fit a cubic spline using Thomas' Algorithm and matrices
+3. 	Find TMS peak in array
+4.	Build either a Boxcar or Savitzky-Golay Filter
+5.	Fit a natural cubic spline
 6.	Find all roots of the spline
 7.	For each pair of roots, determine the peak position using
 			(Xb - Xa)/2
