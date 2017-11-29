@@ -1,0 +1,37 @@
+		 -=> NMR ANALYSIS <=-
+
+Program Options
+===============
+Baseline Adjustment:	10000
+Tolerance:	1e-10
+Savitzky Golay Filter
+Filter Size:	11
+Filter Passes:	5
+
+Integration Method
+==================
+Composite Simpson Integration
+
+Plot File Data
+==============
+File: nmr.in
+Plot Shifted 10.6091 ppm for TMS calibration
+
+
+
+Peak	Begin	End	Location	Top	Area	Hydrogens
+===================================================================
+1   -9.61991   -9.58718   -9.60354   7691.86   153.675   446
+2   -9.50532   -9.45087   -9.4781   68235.7   1764.25   5124
+3   -9.38084   -9.32881   -9.35482   82274.3   2064.43   5996
+4   -9.25281   -9.21895   -9.23588   24041.6   470.418   1366
+5   -8.47709   -8.46825   -8.47267   348.409   1.98857   5
+6   -8.37008   -8.32991   -8.34999   13747.4   320.316   930
+7   -8.24217   -8.20988   -8.22602   9629.54   182.002   528
+8   -6.65873   -6.65559   -6.65716   147.367   0.344289   1
+9   -6.55382   -6.52132   -6.53757   18313.6   356.818   1036
+10   -6.43454   -6.40332   -6.41893   16072.3   302.099   877
+
+
+Anaylsis took 17.51 seconds.
+(From TMS Calibration through Integration)
