@@ -49,7 +49,7 @@ gsl_complex guassian( gsl_complex a, gsl_complex b, spline spline[], int numpoin
 
 // CUBIC SPLINE METHODS
 vector<point> interpolateSpline(point points[], int numpoints, spline spline[], gsl_complex baseline);
-gsl_complex eqn(double x, spline s, gsl_complex baseline);
+gsl_complex eqn(gsl_complex x, spline s, gsl_complex baseline);
 
 // ROOT FINDING, SORTING, AND TMS PEAK METHODS
 gsl_complex findRoot( point r1, point r2, spline s[], int numpoints, gsl_complex baseline, gsl_complex tolerance);
@@ -63,7 +63,12 @@ int main(int argc, char* argv[]){
 	cout.precision(12);
 
 	// Possible savitzky golay filter sizes with corresponding weights
-	sg sgfilters = { {-3.0,12.0,17.0,12.0,-3.0}, {-2.0,3.0,6.0,7.0,6.0,3.0,-2.0}, {-36.0,9.0,44.0,69.0,84.0,89.0,84.0,69.0,44.0,9.0,-36.0} };
+	sg sgfilters = { 
+	{ gsl_complex_rect(-3.0,0), gsl_complex_rect(12.0,0), gsl_complex_rect(17.0,0), gsl_complex_rect(12.0,0), gsl_complex_rect(-3.0,0)}, 
+	{ gsl_complex_rect(-2.0,0), gsl_complex_rect(3.0,0), gsl_complex_rect(6.0,0), gsl_complex_rect(7.0,0), gsl_complex_rect(6.0,0), gsl_complex_rect(3.0,0),
+		gsl_complex_rect(-2.0,0)}, 
+	{ gsl_complex_rect(-36.0,0), gsl_complex_rect(9.0,0), gsl_complex_rect(44.0,0), gsl_complex_rect(69.0,0), gsl_complex_rect(84.0,0),
+		gsl_complex_rect(89.0,0), gsl_complex_rect(84.0,0), gsl_complex_rect(69.0,0), gsl_complex_rect(44.0,0), gsl_complex_rect(9.0,0), gsl_complex_rect(-36.0,0)} };
 
 	// Total Number of Points in NMR File
 	int numpoints = 0;
@@ -136,9 +141,9 @@ int main(int argc, char* argv[]){
 	// Finds the highest Y value above the baseline with the highest x value
 	// then subtracts the tms point x value from all x values.
 	ofile.open("tms");
-	double tms = findtmsPeak(baseline, points, numpoints);
+	gsl_complex tms = findtmsPeak(baseline, points, numpoints);
 	for(int i = 0; i < numpoints; i++){
-		points[i].x = points[i].x - tms;
+		points[i].x = gsl_complex_add(points[i].x, gsl_complex_negative(tms));
 		ofile << points[i].x << " " << points[i].y << endl;
 	}
 	ofile.close();
@@ -159,8 +164,8 @@ int main(int argc, char* argv[]){
 			       // Overlay a Boxcar Filter on the 2D Vector
 			       if( (filterSize > 0 ) && (filterSize % 2 != 0) ){
 				       for(int z = 0; z < filterPass; z++){
-					       double sum = 0.0;	// Sum of the current points in the filter
-					       double avg;		// Average of the current points in the filter
+					       gsl_complex sum = gsl_complex_rect( 0.0, 0 );	// Sum of the current points in the filter
+					       gsl_complex avg;		// Average of the current points in the filter
 					       bool done = false;	// Process End boolean
 
 					       int endIndex = filterSize;
@@ -172,14 +177,14 @@ int main(int argc, char* argv[]){
 							       // Treats the array as a circular structure
 							       // Overflow returns to the beginning of the array
 							       if(i > numpoints){
-								       sum += points[i - numpoints].y;
+								       sum = gsl_complex_add( sum, points[i - numpoints].y );
 							       }
 							       else{
-								       sum += points[i].y;
+								       sum = gsl_complex_add( sum, points[i].y );
 							       }
 							       // No underflow occurs because the starting value is 1	
 						       }
-						       avg = sum / double(filterSize);
+						       avg = sum / gsl_complex(filterSize);
 
 						       // Overflow applies to the top limit of the filter range as well
 						       if(startIndex+1 > numpoints){
@@ -210,28 +215,28 @@ int main(int argc, char* argv[]){
 			       if( (filterSize == 5) || (filterSize == 11) || (filterSize == 17)){
 
 				       int m = filterSize/2;		// Filtered Element at Middle Index
-				       double norm;			// Normalization Factor
-				       double sg[filterSize] = {};	// Filter Weights Array
+				       gsl_complex norm;			// Normalization Factor
+				       gsl_complex sg[filterSize] = {};	// Filter Weights Array
 
 					// Weight Arrays and Normalization Factors for the Corresponding Savitzky Filter Size
 				       if( filterSize == 5){  
 					       for(int i = 0; i < 5; i++) { sg[i] = sgfilters.five[i]; } 
-					       norm = 35;
+					       norm = gsl_complex_rect( 35, 0 );
 				       }
 				       if( filterSize == 7){  
 					       for(int i = 0; i < 7; i++) { sg[i] = sgfilters.seven[i]; }
-					       norm = 21;
+					       norm = gsl_complex_rect( 21, 0 );
 				       }
 				       if( filterSize == 11){  
 					       for(int i = 0; i < 11; i++) { sg[i] = sgfilters.eleven[i]; }
-					       norm = 429;
+					       norm = gsl_complex_rect( 429, 0 );
 				       }
 
 					// Run the filter filterPass number of times over the entire array
 					// Filtering each point as the middle index of the filter size
 				       for(int z = 0; z < filterPass; z++){
 					       for(int j = 0; j < numpoints; j++){
-						       double ci, next, y;
+						       gsl_complex ci, next, y;
 						       for(int i = 0; i < filterSize; i++){
 							       if( j+i > numpoints){
 								       next = points[j + i - numpoints].y;
@@ -241,13 +246,13 @@ int main(int argc, char* argv[]){
 							       }
 
 							       ci = sg[i];	// Filter Weight Value
-							       y += (ci * next);
+							       y = gsl_complex_add( y, gsl_complex_mul(ci , next) );
 						       }
 						       if(j+m > numpoints){
-							       points[j+m - numpoints].y = y / norm;
+							       points[j+m - numpoints].y = gsl_complex_div( y , norm );
 						       }
 						       else{
-							       points[j+m].y = y / norm;
+							       points[j+m].y = gsl_complex_div( y , norm );
 						       }
 						       y = 0;
 					       }
@@ -276,8 +281,8 @@ int main(int argc, char* argv[]){
 	int m = numpoints - 1;
 
 	spline spline[numpoints];
-	double h[m], alpha[m], l[numpoints], u[numpoints], z[numpoints];
-	double a[numpoints], b[numpoints], c[numpoints], d[numpoints];
+	gsl_complex h[m], alpha[m], l[numpoints], u[numpoints], z[numpoints];
+	gsl_complex a[numpoints], b[numpoints], c[numpoints], d[numpoints];
 
 	int i, J;
 	// STEP ZERO: SET A VALUES TO Y VALUES OF THE INITIAL DATA
@@ -287,39 +292,39 @@ int main(int argc, char* argv[]){
 
 	// STEP ONE: SET H VALUES
 	for (i = 1; i <= m; i++){
-		h[i-1] = (points[i].x - points[i-1].x);
+		h[i-1] = gsl_complex_add(points[i].x, gsl_complex_negative(points[i-1].x) );
 	}
 
 	// STEP TWO: SET ALPHA VALUES
 	alpha[0] = 0.0;
 	for (i = 1; i < m; i++) {
-		alpha[i] =  (a[i+1] - a[i]) * 3.0 / h[i] - (a[i] - a[i-1]) * 3.0 / h[i-1];
+		alpha[i] =  gsl_complex_add(gsl_complex_div(gsl_complex_mul(gsl_complex_add(a[i+1], gsl_complex_negative(a[i])), 3.0), h[i]), gsl_complex_negative(gsl_complex_div(gsl_complex_mul(gsl_complex_add(a[i], gsl_complex_negative(a[i-1])), 3.0), h[i-1])));
 	}
 
 	// STEP THREE
 	// L, U, and Z matrices for Tridiagonal Matrix Solving
 	// USES METHOD DESCRIBED IN ALGORITHM 6.7
-	l[0] = 1.0;
-	u[0] = 0.0;
-	z[0] = 0.0;
+	l[0] = gsl_complex_rect(1.0, 0);
+	u[0] = gsl_complex_rect(0.0, 0);
+	z[0] = gsl_complex_rect(0.0, 0);
 
 	// STEP FOUR
 	for (i = 1; i < m; i++) {
-		l[i] = 2.0 * (points[i+1].x - points[i-1].x) - h[i-1] * u[i-1];
-		u[i] = h[i] / l[i];
-		z[i] = (alpha[i] - h[i-1] * z[i-1]) / l[i];
+		l[i] = gsl_complex_add(gsl_complex_mul(gsl_complex_rect(2.0,0), gsl_complex_add(points[i+1].x, gsl_complex_negative(points[i-1].x))), gsl_complex_negative(gsl_complex_mul(h[i-1], u[i-1])));
+		u[i] = gsl_complex_div(h[i], l[i]);
+		z[i] = gsl_complex_div(gsl_complex_add(alpha[i], gsl_complex_negative(gsl_complex_mul(h[i-1], z[i-1]))), l[i]);
 	}
 
 	// STEP FIVE
-	l[m] = 1.0;
-	u[m] = 0.0;
-	c[m] = 0.0;
+	l[m] = gsl_complex_rect(1.0,0);
+	u[m] = gsl_complex_rect(0.0,0);
+	c[m] = gsl_complex_rect(0.0,0);
 
 	// STEP SIX: SET B, C, D COEFFICIENT VALUES
 	for (J = numpoints - 2; J >= 0; J--) {
-		c[J] = z[J] - u[J] * c[J+1];
-		b[J] = (a[J+1] - a[J]) / h[J] - h[J] * (c[J+1] + 2.0 * c[J]) / 3.0;
-		d[J] = (c[J+1] - c[J]) / (3.0 * h[J]);
+		c[J] = gsl_complex_add(z[J], gsl_complex_negative(gsl_complex_mul(u[J], c[J+1])));
+		b[J] = gsl_complex_add(gsl_complex_div(gsl_complex_add(a[J+1],gsl_complex_negative( a[J])), h[J]), gsl_complex_negative(gsl_complex_div(gsl_complex_mul(h[J], gsl_complex_add(c[J+1], gsl_complex_mul(gsl_complex_rect(2.0,0), c[J]), 3.0)))));
+		d[J] = gsl_complex_div(gsl_complex_add(c[J+1],gsl_complex_negative( c[J])), gsl_complex_mul(gsl_complex_rect(3.0,0), h[J]));
 	} 
 
 	// SET COEFFICIENT VALUES IN THE SPLINE ACCORDINGLY
@@ -331,9 +336,9 @@ int main(int argc, char* argv[]){
 	// Uses Bisection method on the prev and curr root endpoints to find the exact value
 	// of the root. If no root is found (NAN), no root is added to the roots point vector.
 	
-	vector<double> roots;
+	vector<gsl_complex> roots;
 	for(int i = 0; i < numpoints-1; i++){
-		double root1 = NAN;
+		gsl_complex root1 = NAN;
 		// One point must be above and the other below in either variation
 		// (first below and second above OR first above and second below)
 		if(points[i].y < baseline && points[i+1].y > baseline){
@@ -356,7 +361,7 @@ int main(int argc, char* argv[]){
 	// Four Integration Types are Offered
 	// Composite Simpson, Romberg, Adaptive Quadrature, Gaussian Quadrature
 
-	double area[roots.size()/2];	
+	gsl_complex area[roots.size()/2];	
 	switch(integration){
 		// The roots point vector holds pairs of roots at either side of a peak
 		// Each pair of roots is used to find the area of the peak
@@ -407,7 +412,7 @@ int main(int argc, char* argv[]){
 		}
 	}
 
-	double small = area[0];
+	gsl_complex small = area[0];
 	int hydrogens[roots.size()/2];
 	// Find the smallest area
 	for( int i = 0; i < roots.size()/2 ; i++ ){
@@ -421,8 +426,8 @@ int main(int argc, char* argv[]){
 	}
 
 	// Find the top of each peak
-	double top[roots.size()/2];
-	double mid;
+	gsl_complex top[roots.size()/2];
+	gsl_complex mid;
 	for( int i = 0; i < roots.size(); i+=2 ){
 		top[i/2] = findTop(roots[i], roots[i+1], spline, numpoints, baseline);	
 	}
@@ -483,11 +488,11 @@ int main(int argc, char* argv[]){
 }
 
 // Finds the Peak Y Value between two roots (x values)
-double findTop( double x1, double x2, spline s[], int numpoints, double baseline){
+gsl_complex findTop( gsl_complex x1, gsl_complex x2, spline s[], int numpoints, gsl_complex baseline){
 
-	double top = 0.0;
-	double tmp;
-	for(double i = x1; i < x2; i += 0.000001){
+	gsl_complex top = 0.0;
+	gsl_complex tmp;
+	for(gsl_complex i = gsl_complex(x1,0) ; i < x2; i += 0.000001){
 		for( int j = 0; j < numpoints; j++ ){
 			if( i >= s[j].x && i < s[j+1].x ){
 				tmp = eqn(i, s[j], baseline);
@@ -501,34 +506,34 @@ double findTop( double x1, double x2, spline s[], int numpoints, double baseline
 }
 // Gaussian Legendre Quadrature Method using pound's code from https://github.com/drlbs/quadrature.git
 // converted to c++
-double guassian( double a, double b, spline spline[], int numpoints, double baseline){
+gsl_complex guassian( gsl_complex a, gsl_complex b, spline spline[], int numpoints, gsl_complex baseline){
 
 	// Root Values Array
-	double x[8] = {-9.602898564975363E-001,
-			-7.966664774136267E-001,
-			-5.255324099163290E-001,
-			-1.834346424956498E-001,
-			1.834346424956498E-001,
-			5.255324099163290E-001,
-			7.966664774136267E-001,
-			9.602898564975363E-001 };
+	gsl_complex x[8] = { gsl_complex_rect(-9.602898564975363E-001,0),
+			gsl_complex_rect(-7.966664774136267E-001,0),
+			gsl_complex_rect(-5.255324099163290E-001,0),
+			gsl_complex_rect(-1.834346424956498E-001,0),
+			gsl_complex_rect(1.834346424956498E-001,0),
+			gsl_complex_rect(5.255324099163290E-001,0),
+			gsl_complex_rect(7.966664774136267E-001,0),
+			gsl_complex_rect(9.602898564975363E-001,0) };
 	// Weight Values Array
-	double w[8] = {1.012285362903706E-001,
-			2.223810344533744E-001,
-			3.137066458778874E-001,
-			3.626837833783621E-001,
-			3.626837833783621E-001,
-			3.137066458778874E-001,
-			2.223810344533744E-001,
-			1.012285362903706E-001 };	
+	gsl_complex w[8] = {gsl_complex_rect(1.012285362903706E-001,0),
+			gsl_complex_rect(2.223810344533744E-001,0),
+			gsl_complex_rect(3.137066458778874E-001,0),
+			gsl_complex_rect(3.626837833783621E-001,0),
+			gsl_complex_rect(3.626837833783621E-001,0),
+			gsl_complex_rect(3.137066458778874E-001,0),
+			gsl_complex_rect(2.223810344533744E-001,0),
+			gsl_complex_rect(1.012285362903706E-001,0)};	
 	
 	// Area Sum
-	double sum = 0.0;
+	gsl_complex sum = 0.0;
 	// Index of gaussian t input in spline function
 	int ind;
 	// Integrate to find the area
 	for( int i = 0; i < 8; i++ ){
-		double tmp = ((b-a) * x[i] + a + b) / 2.0;
+		gsl_complex tmp = ((b-a) * x[i] + a + b) / 2.0;
 		for( int i = 0; i < numpoints; i++ ){
 			if( tmp >= spline[i].x && tmp < spline[i+1].x ){
 				ind = i;		
@@ -541,12 +546,12 @@ double guassian( double a, double b, spline spline[], int numpoints, double base
 }
 
 // Adaptive Quadrature Method using Pg. 224 (Algorithm 4.3) from the text book
-double adaptive( double AA, double BB, spline spline[], int numpoints, double tolerance, double baseline){
+gsl_complex adaptive( gsl_complex AA, gsl_complex BB, spline spline[], int numpoints, gsl_complex tolerance, gsl_complex baseline){
 
 	int levsize = 50;
-	double tol[levsize], a[levsize], h[levsize], fa[levsize], fc[levsize], fb[levsize], s[levsize], v[7];
+	gsl_complex tol[levsize], a[levsize], h[levsize], fa[levsize], fc[levsize], fb[levsize], s[levsize], v[7];
 	int l[levsize];
-	double APP, fd, fe, s1, s2;
+	gsl_complex APP, fd, fe, s1, s2;
 	int i, n, level;
 	
 	h[1] = 0.5 * (BB - AA);
@@ -585,8 +590,8 @@ double adaptive( double AA, double BB, spline spline[], int numpoints, double to
 	// STEP TWO
 	while( ( i > 0 ) && ( oklevel ) ){
 		// STEP THREE
-		double half = a[i] + 0.5 * h[i];
-		double onehalf = a[i] + 1.5 * h[i];
+		gsl_complex half = a[i] + 0.5 * h[i];
+		gsl_complex onehalf = a[i] + 1.5 * h[i];
 		for( int j = 0; j < numpoints; j++ ){
 			if( half >= spline[j].x && half < spline[j+1].x ){
 				fd = eqn( half, spline[j], baseline);
@@ -739,9 +744,9 @@ gsl_complex compositeSimpson( gsl_complex a, gsl_complex b, spline spline[], int
 
 
 	gsl_complex x;
-	gsl_complex xi = 0.0;
+	gsl_complex xi = gsl_complex_rect(0.0, 0);
 	// STEP ONE
-	gsl_complex h = (b - a) / 50;
+	gsl_complex h = gsl_complex_div(gsl_complex_add(b, gsl_complex_negative(a)), 50);
 	// STEP TWO
 	gsl_complex xi0 = eqn(a, spline[ai], baseline) + eqn( b, spline[bi], baseline);
 	gsl_complex xi1 = 0.0;
@@ -759,14 +764,14 @@ gsl_complex compositeSimpson( gsl_complex a, gsl_complex b, spline spline[], int
 		}
 		// STEP FIVE
 		if( j%2 == 0){
-			xi2 = xi2 + eqn( x, spline[ii], baseline);
+			xi2 = gsl_complex_add(xi2, eqn( x, spline[ii], baseline));
 		}
 		else{
-			xi1 = xi1 + eqn( x, spline[ii], baseline);
+			xi1 = gsl_complex_add(xi1, eqn( x, spline[ii], baseline));
 		}
 	}
 	// AREA HAS BEEN ACHIEVED; RETURN IT
-	xi = h * (xi0 + (2*xi2) + (4*xi1)) / 3;
+	xi = gsl_complex_div(gsl_complex_mul(h, gsl_complex_add((xi0, gsl_complex_add(gsl_complex_mul(2,xi2), gsl_complex_mul(4,xi1))))), 3);
 	return xi;
 }
 
@@ -809,7 +814,7 @@ gsl_complex findRoot( point r1, point r2, spline s[], int numpoints, gsl_complex
 	for(int biIndex = 0; biIndex < 10000; biIndex++){
 
 		// STEP ONE
-		p = a + (b - a) / 2;
+		p = gsl_complex_add(a, gsl_complex_div(gsl_complex_add(b, gsl_complex_negative(a)), 2));
 
 		// Retrieves the appropriate spline index based on the 
 		// x value to be calculated within the x value range
@@ -822,11 +827,11 @@ gsl_complex findRoot( point r1, point r2, spline s[], int numpoints, gsl_complex
 		// STEP TWO
 		// IF THE MID POINT BETWEEN THE ENDPOINTS IS WITHIN TOLERANCE
 		// OR IF THE ROOT IS AT ZERO, THEN THE ROOT HAS BEEN FOUND
-		if( (fp == 0) || ( ((b - a) / 2) < tolerance) ){
+		if( (fp == 0) || ( (gsl_complex_div(gsl_complex_add(b, gsl_complex_negative(a)), 2)) < tolerance) ){
 			return p;
 		}
 		// STEP THREE
-		if( fa * fp > 0){
+		if( gsl_complex_mul(fa, fp) > 0){
 			a = p;
 			fa = fp;
 		}
@@ -850,7 +855,7 @@ bool sortIncrX( point p1, point p2){
 // spline segment, and the baseline
 gsl_complex eqn(gsl_complex x, spline s, gsl_complex baseline){
 
-	return ( s.a + s.b * (x - s.x) + s.c * pow(x - s.x, 2)  +  s.d * pow(x - s.x, 3) ) - baseline;
+	return gsl_complex_add(( gsl_complex_add(s.a, gsl_complex_mul(s.b, gsl_complex_add(x, gsl_complex_negative(s.x)))) + s.c * pow(x - s.x, 2)  +  s.d * pow(gsl_complex_add(x, gsl_complex_negative(s.x)), 3) ), gsl_complex_negative(baseline));
 }
 
 // Returns the highest x value whose y is above the baseline
