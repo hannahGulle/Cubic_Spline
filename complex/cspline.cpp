@@ -11,6 +11,10 @@
 #include<cmath>
 #include<ctime>
 
+// GNU SCIENTIFIC LIBRARY REFERENCES
+#include<gsl/gsl_complex.h>
+#include<gsl/gsl_complex_math.h>
+
 // Holds the double X and Y values of a point
 struct point{
 	double x;
@@ -37,6 +41,10 @@ struct sg{
 };
 
 using namespace std;
+
+// DFT METHODS
+gsl_complex dftZ( int i, int j, int N );
+double dftG( int i, int j, int N );
 
 // AREA INTEGRATION METHODS
 double romberg( double a, double b, spline spline[], int numpoints, double baseline, double tolerance);
@@ -130,6 +138,9 @@ int main(int argc, char* argv[]){
 		ofile << points[i].x << " " << points[i].y << endl;
 	}
 	ofile.close();
+
+	// Array of Complex Numbers for DFT Filtering
+	gsl_complex C[numpoints];
 
 	// *********************** APPLY FILTERS STEP **************************************
 	// Three filters available: None, Boxcar, Savitzky Golay (5, 7, 11)
@@ -250,9 +261,50 @@ int main(int argc, char* argv[]){
 
 		// TODO: DFT MATRIX FILTER
 		case 3:{
+			
+			// c = Zy
+			// Computing C as a product of Z and the point y
+			gsl_complex z;
+			for( int i = 0; i < numpoints; i++ ){
 
+				for( int j = 0; j < numpoints; j++ ){
 
+					// Computing Z as a complex result of the function
+					// ((e^(-i2pi/N))^(jk))/ sqrt(N)
+					z = gsl_complex_add( z, dftZ( i, j, numpoints ) );
+				
+					C[i] = gsl_complex_add( C[i], gsl_complex_mul_real( z, points[i].y ) );
+				}
+			}
+
+			double identity[numpoints][numpoints];
+
+			// Create Identity Matrix of numpoints by numpoints dimensions
+			for( int i = 0; i < numpoints; i++){
+
+				for( int j = 0; j < numpoints; j++ ){
 		
+					if( i==j ){
+						identity[i][j] = 1.0;
+					}
+					else{
+						identity[i][j] = 0.0;
+					}
+				}
+			}		
+		
+			// C = GC
+			double g;
+			for( int i = 0; i < numpoints; i++ ){
+
+				for( int j = 0; j < numpoints; j++ ){
+
+					g = dftG( i, j, numpoints ) * identity[i][j];
+			
+					C[i] = gsl_complex_add( C[i], gsl_complex_mul_real( C[i], g ) );
+				}
+			}
+			
 		}
 
 		default:{
@@ -263,9 +315,20 @@ int main(int argc, char* argv[]){
 
 	}
 
-	// TODO: FILTER RECOVERY METHOD EQN 5
+	// FILTER RECOVERY METHOD EQN 5
+	for( int i = 0; i < numpoints; i++ ){
+
+		for( int j = 0; j < numpoints; j++ ){
+
+			points[i].y = GSL_REAL( gsl_complex_mul( gsl_complex_conjugate( dftZ( i, j, numpoints ) ), C[i] ) );
+		}
+	}	
 	
-	
+	ofile.open("complexFilter");
+	for( int i = 0; i < numpoints; i++ ){
+		ofile << points[i].x << " " << points[i].y << endl;
+	}
+	ofile.close();
 
 	// TODO: FILTER RECOVERY METHOD EQN 6 DIRECT
 	
@@ -489,6 +552,20 @@ int main(int argc, char* argv[]){
 
 	ofile.close();
 	return 0;
+}
+
+double dftG( int i, int j, int N ){
+
+	return( exp( (-4*log(2)*i*j) / pow( N, (3/2) ) ) );
+}
+
+// Computes the Z value of the given matrix element index
+gsl_complex dftZ( int j, int k, int N ){
+
+	gsl_complex inner = gsl_complex_rect( cos( 2*M_PI/N ), -sin( 2*M_PI/N ) );
+	gsl_complex pow = gsl_complex_pow_real( inner, j*k );
+	gsl_complex result = gsl_complex_div_real( pow, sqrt(N) );
+	return result;
 }
 
 // Finds the Peak Y Value between two roots (x values)
