@@ -45,6 +45,7 @@ using namespace std;
 // DFT METHODS
 gsl_complex dftZ( int i, int j, int N );
 double dftG( int i, int j, int N );
+double dirack( int j, int k );
 
 // AREA INTEGRATION METHODS
 double romberg( double a, double b, spline spline[], int numpoints, double baseline, double tolerance);
@@ -259,35 +260,38 @@ int main(int argc, char* argv[]){
 			       break;
 		       }
 
-		// TODO: DFT MATRIX FILTER
+		// DFT MATRIX FILTER
 		case 3:{
 			
 			// c = Zy
 			// Computing C as a product of Z and the point y
-			gsl_complex z;
+			gsl_complex zSum;
 			for( int i = 0; i < numpoints; i++ ){
 				
+				zSum = gsl_complex_rect( 0.0, 0.0 );
+
 				for( int j = 0; j < numpoints; j++ ){
 					
 					// Computing Z as a complex result of the function
 					// ((e^(-i2pi/N))^(jk))/ sqrt(N)
-					z = gsl_complex_add( z, dftZ( i, j, numpoints ) );
-					C[i] = gsl_complex_add( C[i], gsl_complex_mul_real( z, points[i].y ) );
+					zSum = gsl_complex_add( zSum, gsl_complex_mul_real( dftZ( i, j, numpoints ), points[j].y ) );
 				}
+				C[i] = zSum;
 			}
 			
 			// C = GC
-			double g;
+			gsl_complex gSum;
 			for( int i = 0; i < numpoints; i++ ){
-				
+		
+				gSum = gsl_complex_rect( 0.0, 0.0 );	
+	
 				for( int j = 0; j < numpoints; j++ ){
 					
-					// Acts as an identity matrix
-					if( i==j ){
-						g += dftG( i, j, numpoints );
+					if( i == j ){
+						gSum = gsl_complex_add( gSum, gsl_complex_mul_real( C[j], dftG( i, j, numpoints ) ) );
 					}
-					C[i] = gsl_complex_add( C[i], gsl_complex_mul_real( C[i], g ) );
 				}
+				C[i] = gSum;
 			}
 			break;		
 		}
@@ -304,10 +308,13 @@ int main(int argc, char* argv[]){
 	double newY;
 	for( int i = 0; i < numpoints; i++ ){
 
+		newY = 0.0;
+
 		for( int j = 0; j < numpoints; j++ ){
-			newY = double(GSL_REAL( gsl_complex_mul( gsl_complex_conjugate( dftZ( i, j, numpoints ) ), C[i] ) ));
-			points[i].y = newY;
+
+			newY += double(GSL_REAL( gsl_complex_mul( gsl_complex_conjugate( dftZ( i, j, numpoints ) ), C[j] ) ));
 		}
+		points[i].y = newY;
 	}	
 	
 	ofile.open("complexFilter");
@@ -540,6 +547,11 @@ int main(int argc, char* argv[]){
 	return 0;
 }
 
+double dirack( int j, int k ){
+
+	return exp( -2*M_PI*j*k );
+}
+
 double dftG( int i, int j, int N ){
 
 	return( exp( (-4*log(2)*i*j) / pow( N, (3/2) ) ) );
@@ -548,7 +560,9 @@ double dftG( int i, int j, int N ){
 // Computes the Z value of the given matrix element index
 gsl_complex dftZ( int j, int k, int N ){
 
-	gsl_complex inner = gsl_complex_rect( cos( 2*M_PI/N ), -sin( 2*M_PI/N ) );
+	gsl_complex i = gsl_complex_rect( 0.0, -1.0 );
+
+	gsl_complex inner = gsl_complex_exp( gsl_complex_mul_real( i, 2*M_PI/N ) );
 	gsl_complex pow = gsl_complex_pow_real( inner, j*k );
 	gsl_complex result = gsl_complex_div_real( pow, sqrt(N) );
 	return result;
