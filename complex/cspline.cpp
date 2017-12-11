@@ -266,45 +266,30 @@ int main(int argc, char* argv[]){
 			// Computing C as a product of Z and the point y
 			gsl_complex z;
 			for( int i = 0; i < numpoints; i++ ){
-
+				
 				for( int j = 0; j < numpoints; j++ ){
-
+					
 					// Computing Z as a complex result of the function
 					// ((e^(-i2pi/N))^(jk))/ sqrt(N)
 					z = gsl_complex_add( z, dftZ( i, j, numpoints ) );
-				
 					C[i] = gsl_complex_add( C[i], gsl_complex_mul_real( z, points[i].y ) );
 				}
 			}
-
-			double identity[numpoints][numpoints];
-
-			// Create Identity Matrix of numpoints by numpoints dimensions
-			for( int i = 0; i < numpoints; i++){
-
-				for( int j = 0; j < numpoints; j++ ){
-		
-					if( i==j ){
-						identity[i][j] = 1.0;
-					}
-					else{
-						identity[i][j] = 0.0;
-					}
-				}
-			}		
-		
+			
 			// C = GC
 			double g;
 			for( int i = 0; i < numpoints; i++ ){
-
+				
 				for( int j = 0; j < numpoints; j++ ){
-
-					g = dftG( i, j, numpoints ) * identity[i][j];
-			
+					
+					// Acts as an identity matrix
+					if( i==j ){
+						g += dftG( i, j, numpoints );
+					}
 					C[i] = gsl_complex_add( C[i], gsl_complex_mul_real( C[i], g ) );
 				}
 			}
-			
+			break;		
 		}
 
 		default:{
@@ -316,11 +301,12 @@ int main(int argc, char* argv[]){
 	}
 
 	// FILTER RECOVERY METHOD EQN 5
+	double newY;
 	for( int i = 0; i < numpoints; i++ ){
 
 		for( int j = 0; j < numpoints; j++ ){
-
-			points[i].y = GSL_REAL( gsl_complex_mul( gsl_complex_conjugate( dftZ( i, j, numpoints ) ), C[i] ) );
+			newY = double(GSL_REAL( gsl_complex_mul( gsl_complex_conjugate( dftZ( i, j, numpoints ) ), C[i] ) ));
+			points[i].y = newY;
 		}
 	}	
 	
