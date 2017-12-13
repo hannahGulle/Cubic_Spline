@@ -1,0 +1,6 @@
+TO COMPILE/RUN
+	c++ cspline.cpp -lgsl -lgslcblas
+	./a.out nmr
+
+Hannah Gulle
+CSC 335 Project 2 Extra Credit
