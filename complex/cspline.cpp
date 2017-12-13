@@ -46,6 +46,7 @@ using namespace std;
 gsl_complex dftZ( int i, int j, int N );
 double dftG( int i, int j, int N );
 double dirack( int j, int k );
+gsl_complex absval( gsl_complex val );
 
 // AREA INTEGRATION METHODS
 double romberg( double a, double b, spline spline[], int numpoints, double baseline, double tolerance);
@@ -64,6 +65,8 @@ double findtmsPeak(double baseline, point points[], int numpoints);
 double findTop( double x1, double x2, spline s[], int numpoints, double baseline);
 
 int main(int argc, char* argv[]){
+
+	int i, j;
 
 	// Set precision of all numeric output to 12 total digits
 	cout.precision(12);
@@ -110,7 +113,7 @@ int main(int argc, char* argv[]){
 		numpoints++;
 	}
 	infile.close();
-	
+
 	// Begin Finding the Time in Seconds for Analysis
 	clock_t start = clock();
 
@@ -119,7 +122,7 @@ int main(int argc, char* argv[]){
 	// From the Data File
 	point points[numpoints];
 	infile.open(dataFile.c_str());
-	for(int i = 0; i < numpoints; i++){
+	for(i = 0; i < numpoints; i++){
 		point p;
 		infile >> p.x >> p.y;
 		points[i] = p;
@@ -134,7 +137,7 @@ int main(int argc, char* argv[]){
 	// then subtracts the tms point x value from all x values.
 	ofile.open("tms");
 	double tms = findtmsPeak(baseline, points, numpoints);
-	for(int i = 0; i < numpoints; i++){
+	for(i = 0; i < numpoints; i++){
 		points[i].x = points[i].x - tms;
 		ofile << points[i].x << " " << points[i].y << endl;
 	}
@@ -148,14 +151,14 @@ int main(int argc, char* argv[]){
 	switch(filterType){
 		// NO FILTER
 		case 0:{
-			filterName = "No Filter";
-			 cout << "Filter: None Specified. No Filter Size Needed" << endl;
-			 break;
+			       filterName = "No Filter";
+			       cout << "Filter: None Specified. No Filter Size Needed" << endl;
+			       break;
 		       }
 
 		       // BOXCAR FILTER
 		case 1:{
-			filterName = "Boxcar Filter";
+			       filterName = "Boxcar Filter";
 			       // Overlay a Boxcar Filter on the 2D Vector
 			       if( (filterSize > 0 ) && (filterSize % 2 != 0) ){
 				       for(int z = 0; z < filterPass; z++){
@@ -167,7 +170,7 @@ int main(int argc, char* argv[]){
 					       int startIndex = numpoints-1;
 
 					       while(startIndex < numpoints){
-						       for(int i = startIndex; i < endIndex; i++){
+						       for(i = startIndex; i < endIndex; i++){
 
 							       // Treats the array as a circular structure
 							       // Overflow returns to the beginning of the array
@@ -184,11 +187,11 @@ int main(int argc, char* argv[]){
 						       // Overflow applies to the top limit of the filter range as well
 						       if(startIndex+1 > numpoints){
 							       points[startIndex - numpoints].y = avg;
-						       		startIndex = 0;
-							}
+							       startIndex = 0;
+						       }
 						       else{
 							       points[startIndex+1].y = avg;
-								startIndex++;
+							       startIndex++;
 						       }
 						       endIndex++;
 						       sum = 0.0;	// Sum is restart for each filter pass
@@ -205,7 +208,7 @@ int main(int argc, char* argv[]){
 
 		       // SAVITSKY GOLAY FILTER
 		case 2:{
-				filterName = "Savitzky Golay Filter";
+			       filterName = "Savitzky Golay Filter";
 			       // Overlay a Savitzky-Golay Filter on the 2D Vector
 			       if( (filterSize == 5) || (filterSize == 11) || (filterSize == 17)){
 
@@ -213,26 +216,26 @@ int main(int argc, char* argv[]){
 				       double norm;			// Normalization Factor
 				       double sg[filterSize] = {};	// Filter Weights Array
 
-					// Weight Arrays and Normalization Factors for the Corresponding Savitzky Filter Size
+				       // Weight Arrays and Normalization Factors for the Corresponding Savitzky Filter Size
 				       if( filterSize == 5){  
-					       for(int i = 0; i < 5; i++) { sg[i] = sgfilters.five[i]; } 
+					       for(i = 0; i < 5; i++) { sg[i] = sgfilters.five[i]; } 
 					       norm = 35;
 				       }
 				       if( filterSize == 7){  
-					       for(int i = 0; i < 7; i++) { sg[i] = sgfilters.seven[i]; }
+					       for(i = 0; i < 7; i++) { sg[i] = sgfilters.seven[i]; }
 					       norm = 21;
 				       }
 				       if( filterSize == 11){  
-					       for(int i = 0; i < 11; i++) { sg[i] = sgfilters.eleven[i]; }
+					       for(i = 0; i < 11; i++) { sg[i] = sgfilters.eleven[i]; }
 					       norm = 429;
 				       }
 
-					// Run the filter filterPass number of times over the entire array
-					// Filtering each point as the middle index of the filter size
+				       // Run the filter filterPass number of times over the entire array
+				       // Filtering each point as the middle index of the filter size
 				       for(int z = 0; z < filterPass; z++){
-					       for(int j = 0; j < numpoints; j++){
+					       for(j = 0; j < numpoints; j++){
 						       double ci, next, y;
-						       for(int i = 0; i < filterSize; i++){
+						       for(i = 0; i < filterSize; i++){
 							       if( j+i > numpoints){
 								       next = points[j + i - numpoints].y;
 							       }
@@ -260,77 +263,68 @@ int main(int argc, char* argv[]){
 			       break;
 		       }
 
-		// DFT MATRIX FILTER
+		       // DFT MATRIX FILTER
 		case 3:{
-			
-			// c = Zy
-			// Computing C as a product of Z and the point y
-			gsl_complex zSum;
-			for( int i = 0; i < numpoints; i++ ){
-				
-				zSum = gsl_complex_rect( 0.0, 0.0 );
 
-				for( int j = 0; j < numpoints; j++ ){
-					
-					// Computing Z as a complex result of the function
-					// ((e^(-i2pi/N))^(jk))/ sqrt(N)
-					zSum = gsl_complex_add( zSum, gsl_complex_mul_real( dftZ( i, j, numpoints ), points[j].y ) );
-				}
-				C[i] = zSum;
-			}
-			
-			// C = GC
-			gsl_complex gSum;
-			for( int i = 0; i < numpoints; i++ ){
-		
-				gSum = gsl_complex_rect( 0.0, 0.0 );	
-	
-				for( int j = 0; j < numpoints; j++ ){
-					
-					if( i == j ){
-						gSum = gsl_complex_add( gSum, gsl_complex_mul_real( C[j], dftG( i, j, numpoints ) ) );
-					}
-				}
-				C[i] = gSum;
-			}
-			break;		
-		}
+			       // c = Zy
+			       // Computing C as a product of Z and the point y
+			       gsl_complex zSum;
+			       for( i = 0; i < numpoints; i++ ){
+
+				       zSum = gsl_complex_rect( 0.0, 0.0 );
+
+				       for( j = 0; j < numpoints; j++ ){
+
+					       // Computing Z as a complex result of the function
+					       // ((e^(-i2pi/N))^(jk))/ sqrt(N)
+					       zSum = gsl_complex_add( zSum, gsl_complex_mul_real( dftZ( j, i, numpoints ), points[j].y ) );
+				       }
+				       C[i] = zSum;
+			       }
+
+			       // C = GC
+			       gsl_complex gSum;
+			       for( i = 0; i < numpoints; i++ ){
+
+				       gSum = gsl_complex_rect( 0.0, 0.0 );	
+
+				       for( j = 0; j < numpoints; j++ ){
+
+					       if( i == j ){
+						       gSum = gsl_complex_add( gSum, gsl_complex_mul_real( C[j], dftG( j, i, numpoints ) ) );
+					       }
+				       }
+				       C[i] = gSum;
+			       }
+			       break;		
+		       }
 
 		default:{
-			cerr << "Invalid Filter Type; Defaulted to None. Choices:" << endl;
-			cerr << "None (0), Boxcar (1), Savitzky-Golay (2), Discrete Fourier Transform (3)" << endl;
-			break;
+				cerr << "Invalid Filter Type; Defaulted to None. Choices:" << endl;
+				cerr << "None (0), Boxcar (1), Savitzky-Golay (2), Discrete Fourier Transform (3)" << endl;
+				break;
 			}
 
 	}
 
-	// FILTER RECOVERY METHOD EQN 5
+	// FILTER RECOVERY METHOD EQN 5 COMPLETE
 	double newY;
-	for( int i = 0; i < numpoints; i++ ){
+	for( i = 0; i < numpoints; i++ ){
 
 		newY = 0.0;
 
-		for( int j = 0; j < numpoints; j++ ){
+		for( j = 0; j < numpoints; j++ ){
 
 			newY += double(GSL_REAL( gsl_complex_mul( gsl_complex_conjugate( dftZ( i, j, numpoints ) ), C[j] ) ));
 		}
 		points[i].y = newY;
 	}	
-	
+
 	ofile.open("complexFilter");
-	for( int i = 0; i < numpoints; i++ ){
+	for( i = 0; i < numpoints; i++ ){
 		ofile << points[i].x << " " << points[i].y << endl;
 	}
 	ofile.close();
-
-	// TODO: FILTER RECOVERY METHOD EQN 6 DIRECT
-	
-
-
-	// TODO: FILTER RECOVERY METHOD EQN 6 ITERATIVE
-
-
-
 
 
 	// ************************ Fit the Natural Cubic Spline **************************
@@ -344,7 +338,7 @@ int main(int argc, char* argv[]){
 	double h[m], alpha[m], l[numpoints], u[numpoints], z[numpoints];
 	double a[numpoints], b[numpoints], c[numpoints], d[numpoints];
 
-	int i, J;
+	int J;
 	// STEP ZERO: SET A VALUES TO Y VALUES OF THE INITIAL DATA
 	for(i = 0; i < numpoints; i++){
 		a[i] = points[i].y;
@@ -388,16 +382,16 @@ int main(int argc, char* argv[]){
 	} 
 
 	// SET COEFFICIENT VALUES IN THE SPLINE ACCORDINGLY
-	for(int i = 0; i < numpoints; i++){
+	for(i = 0; i < numpoints; i++){
 		spline[i] = {a[i], b[i], c[i], d[i], points[i].x};
 	}
 
 	// ************************** Find the Roots ************************************
 	// Uses Bisection method on the prev and curr root endpoints to find the exact value
 	// of the root. If no root is found (NAN), no root is added to the roots point vector.
-	
+
 	vector<double> roots;
-	for(int i = 0; i < numpoints-1; i++){
+	for( i = 0; i < numpoints-1; i++){
 		double root1 = NAN;
 		// One point must be above and the other below in either variation
 		// (first below and second above OR first above and second below)
@@ -426,69 +420,69 @@ int main(int argc, char* argv[]){
 		// The roots point vector holds pairs of roots at either side of a peak
 		// Each pair of roots is used to find the area of the peak
 		case 0:{
-			integrationName = "Composite Simpson Integration";
-			// Composite Simspon Integration
-			for( int i = 0; i < roots.size(); i+=2){
-				area[i/2] = compositeSimpson(roots[i], roots[i+1], spline, numpoints, baseline);
-			}
-			break;
-		}
+			       integrationName = "Composite Simpson Integration";
+			       // Composite Simspon Integration
+			       for( i = 0; i < roots.size(); i+=2){
+				       area[i/2] = compositeSimpson(roots[i], roots[i+1], spline, numpoints, baseline);
+			       }
+			       break;
+		       }
 
 		case 1:{
-			integrationName = "Romberg Integration";
-			// Romberg Integration 
-			for( int i = 0; i < roots.size(); i+=2){
-				area[i/2] = romberg(roots[i], roots[i+1], spline, numpoints, baseline, tolerance);
-			}
-			break;
-		}
+			       integrationName = "Romberg Integration";
+			       // Romberg Integration 
+			       for( i = 0; i < roots.size(); i+=2){
+				       area[i/2] = romberg(roots[i], roots[i+1], spline, numpoints, baseline, tolerance);
+			       }
+			       break;
+		       }
 
 		case 2:{
-			integrationName = "Adaptive Quadrature Integration";	
-			// Adaptive Quadrature Integration
-			for( int i = 0; i < roots.size(); i+=2){
-				area[i/2] = adaptive( roots[i], roots[i+1], spline, numpoints, tolerance, baseline);
-			}
-			break;
-		}
+			       integrationName = "Adaptive Quadrature Integration";	
+			       // Adaptive Quadrature Integration
+			       for( i = 0; i < roots.size(); i+=2){
+				       area[i/2] = adaptive( roots[i], roots[i+1], spline, numpoints, tolerance, baseline);
+			       }
+			       break;
+		       }
 
 		case 3:{
-			integrationName = "Gaussian Legendre Quadrature Integration";
-			// Guassian Legendre Quadrature Integration
-			for( int i = 0; i < roots.size(); i+=2){
-				area[i/2] = guassian(roots[i], roots[i+1], spline, numpoints, baseline);
-			}
-			break;
-		}
+			       integrationName = "Gaussian Legendre Quadrature Integration";
+			       // Guassian Legendre Quadrature Integration
+			       for( i = 0; i < roots.size(); i+=2){
+				       area[i/2] = guassian(roots[i], roots[i+1], spline, numpoints, baseline);
+			       }
+			       break;
+		       }
 
 		default:{
-			integrationName = "Invalid Input; No Integration";
-			cout << "Invalid Integration Input Type. Choose from the following options:" << endl;
-			cout << "Composite Simpson (0)" << endl;
-			cout << "Romberg (1)" << endl;
-			cout << "Adaptive Quadrature (2)" << endl;
-			cout << "Gaussian Quadrature (3)" << endl;
-			break;
-		}
+				integrationName = "Invalid Input; No Integration";
+				cout << "Invalid Integration Input Type. Choose from the following options:" << endl;
+				cout << "Composite Simpson (0)" << endl;
+				cout << "Romberg (1)" << endl;
+				cout << "Adaptive Quadrature (2)" << endl;
+				cout << "Gaussian Quadrature (3)" << endl;
+				break;
+			}
 	}
 
 	double small = area[0];
 	int hydrogens[roots.size()/2];
 	// Find the smallest area
-	for( int i = 0; i < roots.size()/2 ; i++ ){
+	for( i = 0; i < roots.size()/2 ; i++ ){
 		if( area[i] < small ){
 			small = area[i];
 		}
 	}
 	// Find the integer ratio of the smallest area (hydrogens) to the other areas
-	for( int i = 0; i < roots.size()/2 ; i++ ){
+	for( i = 0; i < roots.size()/2 ; i++ ){
 		hydrogens[i] = int( area[i] / small );
 	}
 
 	// Find the top of each peak
 	double top[roots.size()/2];
 	double mid;
-	for( int i = 0; i < roots.size(); i+=2 ){
+	for( i = 0; i < roots.size(); i+=2 ){
 		top[i/2] = findTop(roots[i], roots[i+1], spline, numpoints, baseline);	
 	}
 
@@ -496,10 +490,10 @@ int main(int argc, char* argv[]){
 	clock_t end = clock();
 
 	// ************************ OUTPUT RESULTS TO ANALYSIS.DAT ************************************
-	
+
 	// Program Options as Outlined in the nmr.in file:
 	// Baseline Adjustment | Tolerance | Filtering Name | Filter Size | Filter Passes
-	
+
 	ofile.open(outFile);
 	ofile << "\t\t -=> NMR ANALYSIS <=-" << endl;
 	ofile << endl;
@@ -532,19 +526,27 @@ int main(int argc, char* argv[]){
 	// Peak Number | Peak Start X | Peak End X | Peak Manifold X | Peak Top Y | Peak Area | Whole Number Ratio
 	ofile << "Peak\t" << "Begin\t" << "End\t" << "Location\t" << "Top\t" << "Area\t" << "Hydrogens" << endl;
 	ofile << "===================================================================" << endl;
-	for( int i = 0; i < roots.size(); i += 2 ){
+	for( i = 0; i < roots.size(); i += 2 ){
 		ofile << (i/2)+1 << "   " << roots[i] << "   " << roots[i+1] << "   " << (roots[i] + roots[i+1])/2.0 << "   " << top[i/2] << "   " << area[i/2] << "   " << hydrogens[i/2] << endl;
 	}
 
 	ofile << endl;
 	ofile << endl;
-	
+
 	// Analysis Time
 	ofile << "Anaylsis took " << (double)(1000 * (end - start)/CLOCKS_PER_SEC) << " milliseconds." << endl;	
 	ofile << "(From TMS Calibration through Integration)" << endl;
 
 	ofile.close();
 	return 0;
+}
+
+gsl_complex absval( gsl_complex val ){
+
+	if( GSL_REAL( val ) >= 0.0 ){
+		return val;
+	}
+	return gsl_complex_negative( val );
 }
 
 double dirack( int j, int k ){
@@ -591,23 +593,23 @@ double guassian( double a, double b, spline spline[], int numpoints, double base
 
 	// Root Values Array
 	double x[8] = {-9.602898564975363E-001,
-			-7.966664774136267E-001,
-			-5.255324099163290E-001,
-			-1.834346424956498E-001,
-			1.834346424956498E-001,
-			5.255324099163290E-001,
-			7.966664774136267E-001,
-			9.602898564975363E-001 };
+		-7.966664774136267E-001,
+		-5.255324099163290E-001,
+		-1.834346424956498E-001,
+		1.834346424956498E-001,
+		5.255324099163290E-001,
+		7.966664774136267E-001,
+		9.602898564975363E-001 };
 	// Weight Values Array
 	double w[8] = {1.012285362903706E-001,
-			2.223810344533744E-001,
-			3.137066458778874E-001,
-			3.626837833783621E-001,
-			3.626837833783621E-001,
-			3.137066458778874E-001,
-			2.223810344533744E-001,
-			1.012285362903706E-001 };	
-	
+		2.223810344533744E-001,
+		3.137066458778874E-001,
+		3.626837833783621E-001,
+		3.626837833783621E-001,
+		3.137066458778874E-001,
+		2.223810344533744E-001,
+		1.012285362903706E-001 };	
+
 	// Area Sum
 	double sum = 0.0;
 	// Index of gaussian t input in spline function
@@ -634,7 +636,7 @@ double adaptive( double AA, double BB, spline spline[], int numpoints, double to
 	int l[levsize];
 	double APP, fd, fe, s1, s2;
 	int i, n, level;
-	
+
 	h[1] = 0.5 * (BB - AA);
 	int INDEXA, INDEXB, INDEXAH;
 	// Retrieves the appropriate spline index based on the 
@@ -681,7 +683,7 @@ double adaptive( double AA, double BB, spline spline[], int numpoints, double to
 				fe = eqn( onehalf, spline[j], baseline);
 			}
 		}
-	
+
 		// APPROXIMATION FROM SIMPSONS METHOD FOR HALVES OF INTERVALS
 		s1 = h[i] * (fa[i] + 4.0 * fd + fc[i]) / 6.0;
 		s2 = h[i] * (fc[i] + 4.0 * fe + fb[i]) / 6.0;
@@ -695,7 +697,7 @@ double adaptive( double AA, double BB, spline spline[], int numpoints, double to
 		v[5] = tol[i];
 		v[6] = s[i];
 		level = l[i];
-	
+
 		// STEP FOUR: DELETE THE CURRENT LEVEL
 		i--;
 		if( fabs( s1 + s2 - v[6]) < v[5]){
@@ -766,7 +768,7 @@ double romberg (double A, double B, spline spline[], int numpoints, double basel
 	while( !withinRange){
 
 		APP = R1[0] / 2;
-	
+
 		for( int j = 1; j < pow(2,i-2)+1; j++){
 			for(int k = 0; k < numpoints; k++){
 				if( (A + (j - 0.5)*h) >= spline[k].x && (A + (j - 0.5)*h) < spline[k+1].x){
@@ -794,7 +796,7 @@ double romberg (double A, double B, spline spline[], int numpoints, double basel
 			if( R1.size() > j){ R1[j] = R2[j]; }
 			else{ R1.push_back(R2[j]); }
 		}
-		
+
 		// IF THE DIFFERENCE BETWEEN THE LAST TWO INDICES OF R1 IS WITHIN TOLERANCE
 		// AND THIS IS NOT THE FIRST LOOP THEN THE AREA HAS BEEN ACHIEVED
 		if( fabs(R1[R1.size() - 1] - R1[R1.size() - 2]) < tolerance && i > 2){
